@@ -257,19 +257,19 @@ npm run test:coverage       # Generate coverage report
 npm run test:watch          # Run tests in watch mode
 ```
 
-For more details about the test suite, see [TESTING.md](TESTING.md).
+For more details about the test suite, see [TESTING.md](./documentation/TESTING.md).
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on how to get started.
+Contributions are welcome! Please read our [Contributing Guidelines](./documentation/CONTRIBUTING.md) for details on how to get started.
 
 ## Code of Conduct
 
-Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our community approachable and respectful.
+Please read and follow our [Code of Conduct](./documentation/CODE_OF_CONDUCT.md) to keep our community approachable and respectful.
 
 ## Changelog
 
-See our [Changelog](CHANGELOG.md) for a history of changes and releases.
+See our [Changelog](./documentation/CHANGELOG.md) for a history of changes and releases.
 
 ## License
 
