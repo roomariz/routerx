@@ -7,11 +7,13 @@
     "routerx": "./index.js"
   },
   "scripts": {
-    "test": "node test-runner.js",
-    "test:unit": "node test-runner.js && echo 'Unit tests are in tests/unit/'",
-    "test:all": "node --experimental-vm-modules ./node_modules/.bin/jest --no-cache",
-    "test:watch": "node --experimental-vm-modules ./node_modules/.bin/jest --watch",
-    "test:coverage": "node --experimental-vm-modules ./node_modules/.bin/jest --coverage --no-cache",
+    "test": "npx jest --no-cache",
+    "test:unit": "npx jest --testPathPattern=tests/unit --no-cache",
+    "test:integration": "npx jest --testPathPattern=tests/integration --no-cache",
+    "test:all": "npx jest --no-cache",
+    "test:watch": "npx jest --watch",
+    "test:coverage": "npx jest --collectCoverageFrom=\"src/**/*.js\" --coverage --no-cache",
+    "test:check": "node test-runner.js",
     "benchmark": "node benchmark.js"
   },
   "keywords": [
