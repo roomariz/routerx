@@ -18,6 +18,7 @@ function runSimpleTests() {
     './tests/unit/config.test.js',
     './tests/unit/api.test.js',
     './tests/unit/commander.test.js',
+    './tests/unit/utils.test.js',
     './tests/integration/cli.test.js'
   ];
   
