@@ -64,6 +64,20 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our com
 - `CONTRIBUTING.md` - This file
 - `.env` - Local environment variables (not committed)
 
+## Testing
+
+We maintain a comprehensive test suite to ensure code quality and prevent regressions. All contributions should include appropriate tests:
+
+- Add unit tests for new functionality in the `tests/unit/` directory
+- Add integration tests in the `tests/integration/` directory when appropriate
+- Run the full test suite before submitting a pull request:
+  ```bash
+  npm test          # Basic test check
+  npm run test:all  # Full test suite with Jest
+  npm run test:coverage  # Generate coverage report
+  ```
+- For more details about the test suite, see [TESTING.md](TESTING.md)
+
 ## Code Guidelines
 
 - Use consistent formatting (ESLint may be added in the future)

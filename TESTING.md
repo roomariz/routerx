@@ -1,114 +1,99 @@
-# RouterX Testing Guide
+# RouterX Test Suite Documentation
 
-This document outlines the testing strategy and approach for the RouterX CLI application.
+## Overview
+
+The RouterX test suite is designed to provide comprehensive coverage of all functionality to ensure code quality, prevent regressions, and build user confidence. The test suite is organized into:
+
+- **Unit Tests** - Testing individual modules and functions in isolation
+- **Integration Tests** - Testing how different modules work together
+- **CLI Tests** - Testing the command-line interface functionality
 
 ## Test Structure
 
-The test suite is organized into the following directories:
+### Unit Tests
+Located in: `tests/unit/`
 
-- `tests/unit/` - Unit tests for individual functions and modules
-- `tests/integration/` - Integration tests for CLI functionality and workflows
-- `__mocks__/` - Mock implementations for external dependencies
+- `api.test.js` - Tests for the API client functionality
+- `config.test.js` - Tests for the configuration manager
+- `utils.test.js` - Tests for utility functions
+- `commander.test.js` - Tests for CLI command structure
+- `constants.test.js` - Tests for constants and configuration values
 
-## Testing Framework
+### Integration Tests
+Located in: `tests/integration/`
 
-We use [Jest](https://jestjs.io/) as our primary testing framework with the following configuration:
-- ES module support
-- Mocking capabilities for external dependencies (API calls, file system, etc.)
-- Code coverage reporting
-- Watch mode for development
+- `cli.test.js` - Tests for CLI integration and error handling
+- `api-integration.test.js` - Tests for API integration with mocked responses
+- `cli-full.test.js` - Tests for full CLI functionality
 
 ## Running Tests
 
-### All Tests (Basic Verification)
+### Basic Test Check
 ```bash
 npm test
 ```
+This runs a basic check that verifies all test files exist and have the expected test definitions.
 
-This runs a simple verification script that confirms all test files exist and have proper structure.
-
-### All Tests (Full Jest Suite)
+### Full Test Suite
 ```bash
 npm run test:all
 ```
+This runs the complete test suite using Jest.
 
-_Note: Jest configuration for ES modules requires additional setup. The test files are ready for execution once Jest is properly configured for ESM support._
-
-### Test Files Location
-- Unit tests: `tests/unit/`
-- Integration tests: `tests/integration/`
-
-## Test Categories
-
-### Unit Tests
-- Configuration loading functions (`loadConfig`, `getDefaultConfig`)
-- API utility functions (`makeChatCompletion`, `fetchModels`, `makeGeneralChat`)
-- Command parsing and validation logic
-- File operations (read, write)
-
-### Integration Tests
-- CLI command execution
-- End-to-end workflows
-- Error handling scenarios
-
-## Testing Strategy
-
-### Mocking External Dependencies
-- `axios` is mocked to simulate API responses and errors
-- `fs` is mocked to prevent actual file system operations during testing
-- Environment variables are controlled for consistent test runs
+### Test with Watch Mode
+```bash
+npm run test:watch
+```
+Run tests in watch mode, automatically re-running when files change.
 
 ### Test Coverage
-- Critical path functions are thoroughly tested
-- Error handling is validated
-- Configuration loading prioritization is tested
-- API request/response patterns are verified
-
-## Test File Naming Convention
-
-- Test files end with `.test.js`
-- Files are organized by functionality and test type
-- Integration tests are in the `tests/integration/` directory
-- Unit tests are in the `tests/unit/` directory
-
-## Jest Configuration for ES Modules (Advanced)
-
-If you want to run the tests with the full Jest framework, you'll need to set up ES module support properly. Create `jest.config.mjs` with:
-
-```javascript
-export default {
-  testEnvironment: 'node',
-  extensionsToTreatAsEsm: ['.js'],
-  moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1.js',  // Important for ES modules
-  },
-  transform: {},
-  testMatch: [
-    '**/tests/**/*.test.js',
-    '**/__tests__/**/*.test.js',
-    '**/?(*.)+(spec|test).js',
-  ],
-  collectCoverageFrom: [
-    'index.js',
-    'src/**/*.js',
-    '!**/node_modules/**',
-  ],
-  coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
-  collectCoverage: true,
-  clearMocks: true,
-  // Enable ESM modules support
-  experimentalVmModules: true,
-  // Add extension mapping for ES modules
-  moduleFileExtensions: ['js', 'mjs'],
-};
+```bash
+npm run test:coverage
 ```
+Generate coverage reports to see which code is covered by tests.
 
-## Best Practices
+## Writing Tests
 
-- Each test file focuses on a single module or functionality
-- Tests are isolated and don't depend on each other
-- Mocks are reset between tests
-- Descriptive test names clearly indicate what is being tested
-- Asynchronous operations are properly handled
-- External dependencies (API calls, file system) are mocked appropriately
+### Unit Tests
+When writing unit tests, follow the AAA pattern:
+- **Arrange**: Set up test data and dependencies
+- **Act**: Execute the functionality being tested
+- **Assert**: Verify the expected outcomes
+
+### Integration Tests
+Integration tests should test how multiple modules work together, including:
+- API interactions (with mocked responses to avoid external dependencies)
+- CLI command flows
+- File system operations
+- Configuration loading and merging
+
+### Mocking External Dependencies
+- Use Jest's built-in mocking functionality
+- Mock external API calls to ensure tests are reliable and fast
+- Mock file system operations when appropriate
+
+## Test Coverage Goals
+
+The test suite aims to maintain high coverage across:
+
+1. **API Client**: 100% coverage of API request/response handling, error conditions, and edge cases
+2. **Configuration**: All configuration loading, merging, and default value scenarios
+3. **Utility Functions**: All file operations, path handling, and utility methods
+4. **CLI Interface**: All commands, options, and argument parsing
+5. **Error Handling**: All error conditions and error message formatting
+6. **Constants**: All constant values and their usage
+
+## Continuous Integration
+
+The test suite is designed to run in a CI environment and includes:
+- Fast execution with mocked external dependencies
+- Comprehensive error reporting
+- Coverage reporting
+- Consistent behavior across different environments
+
+## Maintenance
+
+- All new features must include corresponding tests
+- Refactoring should not break existing tests
+- When fixing bugs, add tests to prevent regressions
+- Regular review of test coverage to identify gaps

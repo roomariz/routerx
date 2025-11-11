@@ -19,7 +19,10 @@ function runSimpleTests() {
     './tests/unit/api.test.js',
     './tests/unit/commander.test.js',
     './tests/unit/utils.test.js',
-    './tests/integration/cli.test.js'
+    './tests/unit/constants.test.js',
+    './tests/integration/cli.test.js',
+    './tests/integration/api-integration.test.js',
+    './tests/integration/cli-full.test.js'
   ];
   
   let totalTests = 0;

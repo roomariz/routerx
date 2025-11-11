@@ -231,18 +231,33 @@ RouterX follows a modular architecture with the following structure:
 
 ### Test Structure
 
-RouterX has a comprehensive test suite organized as follows:
+RouterX has a comprehensive test suite to ensure functionality and catch regressions, organized as follows:
 
 - **Unit Tests** (`tests/unit/`): Test individual functions and modules in isolation
+  - `api.test.js`: API client functionality and error handling
+  - `config.test.js`: Configuration loading and merging logic
+  - `utils.test.js`: File operations, path handling, and utility methods
+  - `commander.test.js`: CLI command structure and option parsing
+  - `constants.test.js`: Constants and configuration values validation
+
 - **Integration Tests** (`tests/integration/`): Test how different modules work together
+  - `cli.test.js`: CLI integration and error handling
+  - `api-integration.test.js`: API integration with mocked responses
+  - `cli-full.test.js`: Full CLI functionality tests
+
 - **Test Utilities** (`tests/testUtils.js`): Shared utilities for testing
 
 The project uses Jest for testing with proper ESM module support configured in `jest.config.js`.
 
-To run tests with coverage:
+To run tests:
 ```bash
-npm test
+npm test                    # Basic test check
+npm run test:all            # Full test suite with Jest
+npm run test:coverage       # Generate coverage report
+npm run test:watch          # Run tests in watch mode
 ```
+
+For more details about the test suite, see [TESTING.md](TESTING.md).
 
 ## Contributing
 
