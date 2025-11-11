@@ -89,7 +89,9 @@ describe('CLI Integration Tests', () => {
     // Verify that each command has the expected structure
     const chatCommand = testProgram.commands.find(cmd => cmd.name() === 'chat');
     expect(chatCommand).toBeDefined();
-    expect(chatCommand._args.map(arg => arg.arg)).toContain('<prompt>');
+    expect(chatCommand._args.map(arg => 
+      arg.required ? '<' + arg._name + '>' : '[' + arg._name + ']'
+    )).toContain('<prompt>');
 
     const modelsCommand = testProgram.commands.find(cmd => cmd.name() === 'models');
     expect(modelsCommand).toBeDefined();

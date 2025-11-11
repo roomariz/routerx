@@ -44,7 +44,12 @@ jest.mock('../../src/infrastructure/api/index.js', () => ({
 jest.mock('../../src/shared/constants/index.js', () => ({
   ERROR_MESSAGES: {
     MODEL_FETCH_ERROR: '❌ Failed to fetch model list',
-    MISSING_API_KEY: '❌ Missing API key'
+    MISSING_API_KEY: '❌ Missing API key',
+    NO_MODELS_FOUND: 'No models found'
+  },
+  LOG_MESSAGES: {
+    FETCHING_MODELS: 'Fetching models...',
+    AVAILABLE_MODELS: 'Available models'
   }
 }));
 
@@ -57,7 +62,7 @@ jest.mock('../../src/shared/utils/error.js', () => ({
 }));
 
 // Import after mocking
-const { registerModelsCommand } = require('../../src/commands/models/index.js');
+const { registerModelsCommand, handleModelsCommand, filterModels } = require('../../src/commands/models/index.js');
 
 describe('Models Command', () => {
   let mockProgram;
@@ -103,10 +108,8 @@ describe('Models Command', () => {
     let modelsAction;
 
     beforeEach(() => {
-      // Register the command to get the action function
-      registerModelsCommand(mockProgram);
-      const modelsCommand = mockProgram.commands.find(cmd => cmd.name() === 'models');
-      modelsAction = modelsCommand._actionHandler._fn;
+      // Use the exported handler function directly
+      modelsAction = handleModelsCommand;
     });
 
     test('fetches and displays models when successful', async () => {
@@ -132,10 +135,10 @@ describe('Models Command', () => {
 
       // Check that models were displayed (logging occurred)
       expect(console.log).toHaveBeenCalledWith('\nAvailable models:\n');
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('model1'),
-        expect.stringContaining('| Free')
+      const loggedModelEntry = console.log.mock.calls.find(call => 
+        call[0] && call[0].includes('model1') && call[0].includes('| Free')
       );
+      expect(loggedModelEntry).toBeDefined();
     });
 
     test('filters models by free option when provided', async () => {
@@ -243,25 +246,22 @@ describe('Models Command', () => {
 
   describe('filterModels function', () => {
     test('filters by free models correctly', async () => {
-      const mockApiKey = 'test-api-key';
-      validateApiKey.mockReturnValue(mockApiKey);
+      const models = [
+        { id: 'free-model:free', pricing: { prompt: 0 } },
+        { id: 'paid-model', pricing: { prompt: 1 } },
+        { id: 'another-free-model-free', pricing: { prompt: 0 } }
+      ];
 
-      const mockResponse = {
-        data: {
-          data: [
-            { id: 'free-model:free', pricing: { prompt: 0 } },
-            { id: 'paid-model', pricing: { prompt: 1 } },
-            { id: 'another-free-model-free', pricing: { prompt: 0 } }
-          ]
-        }
-      };
+      const filtered = filterModels(models, { free: true });
 
-      mockFetchModels.mockResolvedValue(mockResponse);
-
-      await modelsAction({ free: true });
-
-      // Verify that only free models would be shown
-      expect(mockFetchModels).toHaveBeenCalled();
+      // Verify that only free models are returned
+      expect(filtered.length).toBe(2);
+      expect(filtered).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'free-model:free' }),
+          expect.objectContaining({ id: 'another-free-model-free' })
+        ])
+      );
     });
   });
 });

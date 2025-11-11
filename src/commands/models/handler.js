@@ -9,9 +9,6 @@ import { handleError } from '../../shared/utils/error.js';
 const configManager = new ConfigManager();
 const config = configManager.loadConfig();
 
-// Initialize API client with config
-const apiClient = new ApiClient(config);
-
 /**
  * Filter models based on command options
  * @param {Array} models - Array of model objects from API
@@ -20,7 +17,7 @@ const apiClient = new ApiClient(config);
  * @param {string} [options.search] - Keyword to search for in model names
  * @returns {Array} Filtered array of models
  */
-function filterModels(models, options) {
+export function filterModels(models, options) {
   let filtered = models.filter((m) => m.id);
 
   // Filter by free models if requested
@@ -55,6 +52,9 @@ export async function handleModelsCommand(options) {
   const baseUrl = config.defaultBaseUrl; // Use base URL from config
 
   try {
+    // Initialize API client with config for this request
+    const apiClient = new ApiClient(config);
+    
     console.log(LOG_MESSAGES.FETCHING_MODELS);
     const res = await apiClient.fetchModels(baseUrl);
     const models = res.data.data || [];
@@ -70,7 +70,7 @@ export async function handleModelsCommand(options) {
 
     // Display the available models
     console.log(
-      `\n${LOG_MESSAGES.AVAILABLE_MODELS}${options.free ? ' Free ' : ''}${options.search ? ` matching '${options.search}'` : ''}:\n`
+      `\n${LOG_MESSAGES.AVAILABLE_MODELS}${options.free ? ' Free' : ''}${options.search ? ` matching '${options.search}'` : ''}:\n`
     );
     for (const model of filtered) {
       // Determine if the model is free or paid

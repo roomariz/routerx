@@ -2,3 +2,4 @@
 // Export chat command functionality
 
 export { registerChatCommand } from './command.js';
+export { handleChatCommand } from './handler.js';

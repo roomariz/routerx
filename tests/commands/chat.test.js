@@ -12,7 +12,25 @@ jest.mock('chalk', () => ({
 
 jest.mock('../../src/infrastructure/api/index.js', () => ({
   ApiClient: jest.fn(() => ({
-    makeChatCompletion: jest.fn(() => Promise.resolve({ data: { on: jest.fn() } }))
+    makeChatCompletion: jest.fn(() => {
+      // Create a mock stream that simulates the behavior of a real stream
+      const mockStream = {
+        on: jest.fn((event, handler) => {
+          // Simulate receiving data and ending the stream after a short delay
+          if (event === 'data') {
+            // Call the data handler with some mock data
+            setTimeout(() => handler('Mock stream data\n'), 10);
+          } else if (event === 'end') {
+            // Call the end handler after data has been processed
+            setTimeout(() => handler(), 20);
+          } else if (event === 'error') {
+            // Don't trigger error handler for successful test
+          }
+          return mockStream; // Make it chainable
+        })
+      };
+      return Promise.resolve({ data: mockStream });
+    })
   }))
 }));
 

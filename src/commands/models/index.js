@@ -2,3 +2,4 @@
 // Export models command functionality
 
 export { registerModelsCommand } from './command.js';
+export { handleModelsCommand, filterModels } from './handler.js';

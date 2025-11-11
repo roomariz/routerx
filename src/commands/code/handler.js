@@ -11,8 +11,7 @@ import { handleError, handleAPIError, exitWithError } from '../../shared/utils/e
 const configManager = new ConfigManager();
 const config = configManager.loadConfig();
 
-// Initialize API client with config
-const apiClient = new ApiClient(config);
+
 
 /**
  * Handle the code command action
@@ -85,8 +84,11 @@ export async function handleCodeCommand(mode, target, options) {
   console.log(chalk.blue(LOG_MESSAGES.CODE_MODE), modeLower, '\n');
 
   try {
+    // Initialize API client with config for this request
+    const apiClientInstance = new ApiClient(config);
+    
     // Make the API request
-    const res = await apiClient.makeGeneralChat(apiKey, model, prompt, baseUrl);
+    const res = await apiClientInstance.makeGeneralChat(apiKey, model, prompt, baseUrl);
 
     // Extract and display the response
     const reply = res.data?.choices?.[0]?.message?.content || '(no reply)';
@@ -111,8 +113,11 @@ export async function handleCodeCommand(mode, target, options) {
     if (err.response?.status === 402 && !options.free) {
       console.log(chalk.yellow('💰 Model requires more credits. Searching for best free model...\n'));
       try {
+        // Initialize a new API client for fallback operations
+        const fallbackApiClient = new ApiClient(config);
+        
         // Fetch available models
-        const resList = await apiClient.fetchModels(baseUrl);
+        const resList = await fallbackApiClient.fetchModels(baseUrl);
         const freeModels = resList.data.data
           .map((m) => m.id)
           .filter((id) => /(:free|-free|\/free)/i.test(id));
@@ -139,7 +144,7 @@ export async function handleCodeCommand(mode, target, options) {
         }
 
         // Try with the fallback model
-        const res2 = await apiClient.makeGeneralChat(apiKey, fallback, prompt, baseUrl);
+        const res2 = await fallbackApiClient.makeGeneralChat(apiKey, fallback, prompt, baseUrl);
 
         const reply2 = res2.data?.choices?.[0]?.message?.content || '(no reply)';
         console.log(chalk.green('\n💬 Reply:\n') + reply2);
@@ -154,6 +159,7 @@ export async function handleCodeCommand(mode, target, options) {
           writeFileContent(savePath, reply2);
           console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
         }
+        return; // Early return after successful fallback
       } catch (fallbackErr) {
         const handledFallbackError = handleAPIError(fallbackErr);
 
@@ -161,8 +167,11 @@ export async function handleCodeCommand(mode, target, options) {
         if (fallbackErr.response?.status === 429) {
           console.log(chalk.yellow('⚠️ Preferred free model is rate-limited. Trying next available free model...\n'));
           try {
+            // Initialize a new API client for alternate fallback operations
+            const alternateApiClient = new ApiClient(config);
+            
             // Fetch models again for second fallback attempt
-            const resList2 = await apiClient.fetchModels(baseUrl);
+            const resList2 = await alternateApiClient.fetchModels(baseUrl);
             const freeModels2 = resList2.data.data
               .map((m) => m.id)
               .filter((id) => /(:free|-free|\/free)/i.test(id));
@@ -175,7 +184,7 @@ export async function handleCodeCommand(mode, target, options) {
             console.log(chalk.cyan(`🧠 Retrying with alternate model:`), chalk.yellow(nextFree));
 
             // Try with the second fallback model
-            const res3 = await apiClient.makeGeneralChat(apiKey, nextFree, prompt, baseUrl);
+            const res3 = await alternateApiClient.makeGeneralChat(apiKey, nextFree, prompt, baseUrl);
 
             const reply3 = res3.data?.choices?.[0]?.message?.content || '(no reply)';
             console.log(chalk.green('\n💬 Reply:\n') + reply3);
@@ -190,6 +199,7 @@ export async function handleCodeCommand(mode, target, options) {
               writeFileContent(savePath, reply3);
               console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
             }
+            return; // Early return after successful alternate fallback
           } catch (nextErr) {
             const handledNextError = handleAPIError(nextErr);
             console.error('❌ Alternate fallback also failed:', handledNextError.message);

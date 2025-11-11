@@ -2,23 +2,53 @@
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import { Command } from 'commander';
 
+// Define persistent mock functions at the test file scope
+let mockMakeChatCompletion, mockFetchModels, mockMakeGeneralChat;
+
 // Mock external dependencies that would make real API calls
 jest.mock('../../src/infrastructure/api/index.js', () => {
-  return jest.fn().mockImplementation(() => ({
-    makeChatCompletion: jest.fn(),
-    fetchModels: jest.fn(),
-    makeGeneralChat: jest.fn()
-  }));
+  // Initialize the mock functions
+  mockMakeChatCompletion = jest.fn();
+  mockFetchModels = jest.fn();
+  mockMakeGeneralChat = jest.fn();
+
+  // Array to store all instances that get created (inside the mock)
+  const createdApiClientInstances = [];
+
+  const MockConstructor = jest.fn(() => {
+    const instance = {
+      makeChatCompletion: mockMakeChatCompletion,
+      fetchModels: mockFetchModels,
+      makeGeneralChat: mockMakeGeneralChat
+    };
+    createdApiClientInstances.push(instance);
+    return instance;
+  });
+
+  // Add a way to access the instances from outside the mock
+  MockConstructor.getCreatedInstances = () => createdApiClientInstances;
+
+  return {
+    default: MockConstructor,
+    ApiClient: MockConstructor
+  };
 });
 
 jest.mock('../../src/infrastructure/config/index.js', () => {
-  return jest.fn().mockImplementation(() => ({
-    loadConfig: jest.fn(() => ({
-      defaultModel: 'test-model',
-      defaultBaseUrl: 'https://test-api.com',
-      defaultSavePath: './outputs'
-    }))
-  }));
+  class MockConfigManager {
+    constructor() {}
+    loadConfig() {
+      return {
+        defaultModel: 'test-model',
+        defaultBaseUrl: 'https://test-api.com',
+        defaultSavePath: './outputs'
+      };
+    }
+  }
+  return {
+    default: MockConfigManager,
+    ConfigManager: MockConfigManager
+  };
 });
 
 jest.mock('../../src/shared/utils/auth.js', () => ({
@@ -74,30 +104,38 @@ describe('Command Integration Tests', () => {
   });
 
   test('chat command integration - command registration and execution', async () => {
+    const { handleChatCommand } = require('../../src/commands/chat/index.js');
+    
+    // Set up the mock before executing the command
+    const mockStream = { on: jest.fn() };
+    mockMakeChatCompletion.mockResolvedValue({ data: mockStream });
+
     // Register the chat command
     registerChatCommand(mockProgram);
     
     // Verify the command was registered correctly
     const chatCmd = mockProgram.commands.find(cmd => cmd.name() === 'chat');
     expect(chatCmd).toBeDefined();
+    expect(chatCmd.name()).toBe('chat');
+    // The chat command doesn't have an explicit description, so check for its argument instead
+    expect(chatCmd._args).toBeDefined();
+    expect(chatCmd._args.length).toBeGreaterThan(0);
+    
+    // Verify argument format
     expect(chatCmd._args).toBeDefined();
     expect(chatCmd._args.length).toBeGreaterThan(0);
     if (chatCmd._args.length > 0) {
-      expect(chatCmd._args[0].arg).toBe('<prompt>');
+      // Reconstruct the argument format to match expected format in Commander.js v14
+      const firstArgFormat = chatCmd._args[0].required ? '<' + chatCmd._args[0]._name + '>' : '[' + chatCmd._args[0]._name + ']';
+      expect(firstArgFormat).toBe('<prompt>');
     }
-    
-    // Get the API client instance that was created
-    const ApiClient = require('../../src/infrastructure/api/index.js');
-    const apiClientInstance = ApiClient.mock.instances[0];
-    const mockStream = { on: jest.fn() };
-    apiClientInstance.makeChatCompletion.mockResolvedValue({ data: mockStream });
-    
-    // Execute the command
-    const chatAction = chatCmd._actionHandler._fn;
-    await chatAction('Test prompt', { model: 'test-model' });
-    
+
+    // Execute the command handler directly
+    await handleChatCommand('Test prompt', { model: 'test-model' });
+
+    // The handler should have created an ApiClient instance
     // Verify API was called with correct parameters
-    expect(apiClientInstance.makeChatCompletion).toHaveBeenCalledWith(
+    expect(mockMakeChatCompletion).toHaveBeenCalledWith(
       'test-api-key',
       'test-model',
       'Test prompt',
@@ -106,58 +144,58 @@ describe('Command Integration Tests', () => {
   });
 
   test('models command integration - command registration and execution', async () => {
-    // Register the models command
-    registerModelsCommand(mockProgram);
+    const { handleModelsCommand } = require('../../src/commands/models/index.js');
     
-    // Verify the command was registered correctly
-    const modelsCmd = mockProgram.commands.find(cmd => cmd.name() === 'models');
-    expect(modelsCmd).toBeDefined();
-    expect(modelsCmd.description()).toContain('models');
-    
-    // Get the API client instance that was created
-    const ApiClient = require('../../src/infrastructure/api/index.js');
-    const apiClientInstance = ApiClient.mock.instances[0];
-    apiClientInstance.fetchModels.mockResolvedValue({
+    // Set up the mock before executing the command
+    const mockResponse = {
       data: {
         data: [
           { id: 'test-model-free', pricing: { prompt: 0 } },
           { id: 'test-model-paid', pricing: { prompt: 1 } }
         ]
       }
-    });
+    };
+    mockFetchModels.mockResolvedValue(mockResponse);
+
+    // Register the models command
+    registerModelsCommand(mockProgram);
     
-    // Execute the command
-    const modelsAction = modelsCmd._actionHandler._fn;
-    await modelsAction({});
-    
+    // Verify the command was registered correctly
+    const modelsCmd = mockProgram.commands.find(cmd => cmd.name() === 'models');
+    expect(modelsCmd).toBeDefined();
+    expect(modelsCmd.name()).toBe('models');
+    expect(modelsCmd.description()).toContain('models');
+
+    // Execute the command handler directly
+    await handleModelsCommand({});
+
     // Verify API was called
-    expect(apiClientInstance.fetchModels).toHaveBeenCalledWith('https://test-api.com');
+    expect(mockFetchModels).toHaveBeenCalledWith('https://test-api.com');
   });
 
   test('code command integration - command registration and execution', async () => {
+    // Set up the mock before executing the command
+    mockMakeGeneralChat.mockResolvedValue({
+      data: {
+        choices: [{ message: { content: 'Generated code' } }]
+      }
+    });
+
     // Register the code command
     registerCodeCommand(mockProgram);
     
     // Verify the command was registered correctly
     const codeCmd = mockProgram.commands.find(cmd => cmd.name() === 'code');
     expect(codeCmd).toBeDefined();
+    expect(codeCmd.name()).toBe('code');
     expect(codeCmd.description()).toContain('code');
-    
-    // Get the API client instance that was created
-    const ApiClient = require('../../src/infrastructure/api/index.js');
-    const apiClientInstance = ApiClient.mock.instances[0];
-    apiClientInstance.makeGeneralChat.mockResolvedValue({
-      data: {
-        choices: [{ message: { content: 'Generated code' } }]
-      }
-    });
-    
-    // Execute the command in generate mode
-    const codeAction = codeCmd._actionHandler._fn;
-    await codeAction('generate', ['console.log("hello");'], { model: 'test-model' });
-    
+
+    // Execute the command handler directly - import after mocking to ensure proper behavior
+    const { handleCodeCommand } = require('../../src/commands/code/index.js');
+    await handleCodeCommand('generate', ['console.log("hello");'], { model: 'test-model' });
+
     // Verify API was called with correct parameters
-    expect(apiClientInstance.makeGeneralChat).toHaveBeenCalledWith(
+    expect(mockMakeGeneralChat).toHaveBeenCalledWith(
       'test-api-key',
       'test-model',
       'console.log("hello");',
@@ -167,34 +205,29 @@ describe('Command Integration Tests', () => {
 
   test('command interactions with util functions work correctly', async () => {
     // Test that commands properly interact with utilities
-    registerCodeCommand(mockProgram);
-    
-    const codeCmd = mockProgram.commands.find(cmd => cmd.name() === 'code');
-    const codeAction = codeCmd._actionHandler._fn;
-    
-    // Mock dependencies
-    const ApiClient = require('../../src/infrastructure/api/index.js');
     const { fileExists, readFileContent } = require('../../src/shared/utils/file.js');
-    const apiClientInstance = ApiClient.mock.instances[0];
+    const { handleCodeCommand } = require('../../src/commands/code/index.js');
     
-    // Mock files for the explain mode
+    // Set up mocks before executing the command
     fileExists.mockReturnValue(true);
     readFileContent.mockReturnValue('function test() { return "hello"; }');
-    apiClientInstance.makeGeneralChat.mockResolvedValue({
+    mockMakeGeneralChat.mockResolvedValue({
       data: {
         choices: [{ message: { content: 'Function explanation' } }]
       }
     });
     
-    // Execute explain mode with a file
-    await codeAction('explain', ['test.js'], {});
+    registerCodeCommand(mockProgram);
+    
+    // Execute the command handler directly
+    await handleCodeCommand('explain', ['test.js'], {});
     
     // Verify that file operations were called
     expect(fileExists).toHaveBeenCalledWith('test.js');
     expect(readFileContent).toHaveBeenCalledWith('test.js');
     
     // Verify that the API was called with the content of the file
-    expect(apiClientInstance.makeGeneralChat).toHaveBeenCalledWith(
+    expect(mockMakeGeneralChat).toHaveBeenCalledWith(
       'test-api-key',
       'test-model',
       expect.stringContaining('Explain what this code does'),
@@ -204,26 +237,21 @@ describe('Command Integration Tests', () => {
 
   test('command option parsing and handling works end-to-end', async () => {
     // Test chat command with multiple options
-    registerChatCommand(mockProgram);
-    
-    const chatCmd = mockProgram.commands.find(cmd => cmd.name() === 'chat');
-    const chatAction = chatCmd._actionHandler._fn;
-    
-    // Get the API client instance that was created
-    const ApiClient = require('../../src/infrastructure/api/index.js');
-    const apiClientInstance = ApiClient.mock.instances[0];
+    const { handleChatCommand } = require('../../src/commands/chat/index.js');
     const mockStream = { on: jest.fn() };
-    apiClientInstance.makeChatCompletion.mockResolvedValue({ data: mockStream });
-    
-    // Execute with multiple options
-    await chatAction('Test prompt', {
+    mockMakeChatCompletion.mockResolvedValue({ data: mockStream });
+
+    registerChatCommand(mockProgram);
+
+    // Execute with multiple options using the handler directly
+    await handleChatCommand('Test prompt', {
       model: 'custom-model',
       baseUrl: 'https://custom-api.com',
       save: './output.txt'
     });
-    
+
     // Verify API was called with the specified options
-    expect(apiClientInstance.makeChatCompletion).toHaveBeenCalledWith(
+    expect(mockMakeChatCompletion).toHaveBeenCalledWith(
       'test-api-key',
       'custom-model',
       'Test prompt',

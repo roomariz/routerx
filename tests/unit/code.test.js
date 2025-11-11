@@ -5,9 +5,20 @@ import { Command } from 'commander';
 
 // Mock dependencies BEFORE importing the module under test
 jest.mock('chalk', () => ({
+  default: {
+    yellow: jest.fn((str) => str),
+    green: jest.fn((str) => str),
+    red: jest.fn((str) => str),
+    cyan: jest.fn((str) => str),
+    blue: jest.fn((str) => str),
+    dim: jest.fn((str) => str)
+  },
   yellow: jest.fn((str) => str),
   green: jest.fn((str) => str),
-  red: jest.fn((str) => str)
+  red: jest.fn((str) => str),
+  cyan: jest.fn((str) => str),
+  blue: jest.fn((str) => str),
+  dim: jest.fn((str) => str)
 }));
 
 jest.mock('../../src/infrastructure/config/index.js', () => {
@@ -16,7 +27,7 @@ jest.mock('../../src/infrastructure/config/index.js', () => {
     defaultBaseUrl: 'https://test-api.com',
     defaultSavePath: './outputs'
   };
-  
+
   const MockConfigManager = jest.fn(() => ({
     loadConfig: jest.fn(() => mockConfig),
     getDefaultConfig: jest.fn(() => mockConfig),
@@ -29,15 +40,63 @@ jest.mock('../../src/infrastructure/config/index.js', () => {
   };
 });
 
-// Create a mock instance for the API client
-const mockMakeGeneralChat = jest.fn();
-const mockFetchModels = jest.fn();
+// Create shared mock functions that will be used by all API client instances
+let mockMakeGeneralChat, mockFetchModels;
 
-// Mock the API client constructor
-const MockApiClientConstructor = jest.fn(() => ({
-  makeGeneralChat: mockMakeGeneralChat,
-  fetchModels: mockFetchModels
-}));
+// Mock the API client constructor to return different mock instances for each creation
+// This allows different API client instances to have different behaviors during fallback
+const MockApiClientConstructor = jest.fn();
+
+beforeAll(() => {
+  // Initialize the mock functions
+  mockMakeGeneralChat = jest.fn();
+  mockFetchModels = jest.fn();
+});
+
+// Track instances created during test execution for sequence-dependent tests
+let createdInstances = [];
+let useSeparateInstances = false; // Flag to control behavior per test
+let preconfiguredInstances = null; // Allow tests to pre-configure instances
+let instanceNumber = 0; // Counter for tracking which instance is being created in the current test
+
+beforeEach(() => {
+  // Clear the tracking array and reset flags
+  createdInstances = [];
+  useSeparateInstances = false;
+  preconfiguredInstances = null;
+  instanceNumber = 0; // Reset instance counter for each test
+
+  // Reset and update the mock constructor to behave differently based on the flags
+  MockApiClientConstructor.mockImplementation(() => {
+    instanceNumber++;
+    if (useSeparateInstances) {
+      if (preconfiguredInstances && preconfiguredInstances[instanceNumber - 1]) {
+        // Use pre-configured instance if available
+        const instance = preconfiguredInstances[instanceNumber - 1];
+        createdInstances.push(instance);
+        return instance;
+      } else {
+        // Create new instance with separate mocks
+        const instance = {
+          makeGeneralChat: jest.fn(),
+          fetchModels: jest.fn()
+        };
+        createdInstances.push(instance);
+        return instance;
+      }
+    } else {
+      // For regular tests - use shared mocks
+      return {
+        makeGeneralChat: mockMakeGeneralChat,
+        fetchModels: mockFetchModels
+      };
+    }
+  });
+
+  // Clear the main shared mocks
+  if (mockMakeGeneralChat) mockMakeGeneralChat.mockClear();
+  if (mockFetchModels) mockFetchModels.mockClear();
+});
 
 jest.mock('../../src/infrastructure/api/index.js', () => ({
   default: MockApiClientConstructor,
@@ -48,10 +107,13 @@ jest.mock('../../src/shared/constants/index.js', () => ({
   ERROR_MESSAGES: {
     MISSING_API_KEY: '❌ Missing API key',
     REQUEST_ERROR: '❌ Error processing request',
-    MODEL_FETCH_ERROR: '❌ Failed to fetch model list'
+    MODEL_FETCH_ERROR: '❌ Failed to fetch model list',
+    FILE_NOT_FOUND: '❌ File not found'
   },
   LOG_MESSAGES: {
-    CODE_MODE: '📝 Mode: '
+    CODE_MODE: '📝 Mode: ',
+    USING_MODEL: 'Using model: ',
+    REPLY_HEADER: '💬 Reply:\n'
   }
 }));
 
@@ -79,7 +141,7 @@ jest.mock('../../src/shared/utils/stream.js', () => ({
 }));
 
 // Import after mocking
-const { registerCodeCommand } = require('../../src/commands/code/index.js');
+const { registerCodeCommand, handleCodeCommand } = require('../../src/commands/code/index.js');
 
 describe('Code Command', () => {
   let mockProgram;
@@ -121,8 +183,11 @@ describe('Code Command', () => {
       // Check arguments
       const args = command._args;
       expect(args.length).toBe(2);
-      expect(args[0].arg).toBe('[mode]');
-      expect(args[1].arg).toBe('[target...]');
+      // Reconstruct the argument format to match expected format in Commander.js v14
+      const firstArgFormat = args[0].required ? '<' + args[0]._name + '>' : '[' + args[0]._name + ']';
+      const secondArgFormat = args[1].variadic ? '[' + args[1]._name + '...]' : (args[1].required ? '<' + args[1]._name + '>' : '[' + args[1]._name + ']');
+      expect(firstArgFormat).toBe('[mode]');
+      expect(secondArgFormat).toBe('[target...]');
 
       // Check options
       const options = command.options;
@@ -138,10 +203,8 @@ describe('Code Command', () => {
     let codeAction;
 
     beforeEach(() => {
-      // Register the command to get the action function
-      registerCodeCommand(mockProgram);
-      const codeCommand = mockProgram.commands.find(cmd => cmd.name() === 'code');
-      codeAction = codeCommand._actionHandler._fn;
+      // Use the exported handler function directly
+      codeAction = handleCodeCommand;
     });
 
     test('exits with error when API key is not valid', async () => {
@@ -263,67 +326,92 @@ describe('Code Command', () => {
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
 
-      // Mock API error response with 402 status
-      const apiError = {
-        response: { status: 402, data: { error: { message: 'Payment required' } } }
-      };
-      mockMakeGeneralChat.mockRejectedValueOnce(apiError);
+      // Enable separate instances mode and pre-configure the instances with expected behavior
+      useSeparateInstances = true;
+      instanceNumber = 0; // Reset instance counter to ensure proper sequence
 
-      // Mock model fetching and fallback
-      const mockModelsResponse = {
-        data: {
-          data: [
-            { id: 'free-model:free' },
-            { id: 'another-free-model-free' }
-          ]
-        }
+      const firstInstance = {
+        makeGeneralChat: jest.fn().mockRejectedValue({
+          response: { status: 402, data: { error: { message: 'Payment required' } } }
+        }),
+        fetchModels: jest.fn()
       };
-      mockFetchModels.mockResolvedValueOnce(mockModelsResponse);
-      mockMakeGeneralChat.mockResolvedValueOnce({
-        data: {
-          choices: [{ message: { content: 'Fallback response' } }]
-        }
-      });
+
+      const secondInstance = {
+        makeGeneralChat: jest.fn().mockResolvedValue({
+          data: {
+            choices: [{ message: { content: 'Fallback response' } }]
+          }
+        }),
+        fetchModels: jest.fn().mockResolvedValue({
+          data: {
+            data: [
+              { id: 'free-model:free' },
+              { id: 'another-free-model-free' }
+            ]
+          }
+        })
+      };
+
+      preconfiguredInstances = [firstInstance, secondInstance];
 
       await codeAction('generate', ['test prompt'], {});
 
-      // Check that fallback was attempted
-      expect(mockFetchModels).toHaveBeenCalled();
-      expect(mockMakeGeneralChat).toHaveBeenCalledTimes(2);
+      // Check that fallback was attempted - first instance fails, second succeeds
+      expect(firstInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
+      expect(secondInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
+      expect(secondInstance.fetchModels).toHaveBeenCalled();
     });
 
     test('handles rate limiting error (429) with alternate fallback', async () => {
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
 
-      // Mock initial API error response with 402 status
-      const paymentError = {
-        response: { status: 402, data: { error: { message: 'Payment required' } } }
-      };
-      const rateLimitError = {
-        response: { status: 429, data: { error: { message: 'Rate limited' } } }
+      // Enable separate instances mode and pre-configure the instances with expected behavior
+      useSeparateInstances = true;
+      instanceNumber = 0; // Reset instance counter to ensure proper sequence
+
+      const firstInstance = {
+        makeGeneralChat: jest.fn().mockRejectedValue({
+          response: { status: 402, data: { error: { message: 'Payment required' } } }
+        }),
+        fetchModels: jest.fn() // Won't be called on first instance
       };
 
-      mockMakeGeneralChat.mockRejectedValueOnce(paymentError);
-      mockFetchModels.mockResolvedValueOnce({
-        data: { data: [{ id: 'free-model:free' }] }
-      });
-      mockMakeGeneralChat.mockRejectedValueOnce(rateLimitError);
+      const secondInstance = {
+        makeGeneralChat: jest.fn().mockRejectedValue({
+          response: { status: 429, data: { error: { message: 'Rate limited' } } }
+        }),
+        fetchModels: jest.fn().mockResolvedValue({
+          data: {
+            data: [{ id: 'free-model:free' }]
+          }
+        })
+      };
 
-      // Mock second model fetch for alternate fallback
-      mockFetchModels.mockResolvedValueOnce({
-        data: { data: [{ id: 'alternate-free-model:free' }] }
-      });
-      mockMakeGeneralChat.mockResolvedValueOnce({
-        data: {
-          choices: [{ message: { content: 'Alternate fallback response' } }]
-        }
-      });
+      const thirdInstance = {
+        makeGeneralChat: jest.fn().mockResolvedValue({
+          data: {
+            choices: [{ message: { content: 'Alternate fallback response' } }]
+          }
+        }),
+        fetchModels: jest.fn().mockResolvedValue({
+          data: {
+            data: [{ id: 'alternate-free-model:free' }]
+          }
+        })
+      };
+
+      preconfiguredInstances = [firstInstance, secondInstance, thirdInstance];
 
       await codeAction('generate', ['test prompt'], {});
 
-      // Check that alternate fallback was attempted
-      expect(mockMakeGeneralChat).toHaveBeenCalledTimes(3);
+      // Check that all 3 instances were created and used (first fails, second fails with 429, third succeeds)
+      expect(firstInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
+      expect(secondInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
+      expect(thirdInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
+      expect(secondInstance.fetchModels).toHaveBeenCalled(); // First fallback fetches models
+      expect(thirdInstance.fetchModels).toHaveBeenCalled(); // Second fallback fetches models
     });
   });
 });
