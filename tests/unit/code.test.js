@@ -113,8 +113,18 @@ jest.mock('../../src/shared/constants/index.js', () => ({
   LOG_MESSAGES: {
     CODE_MODE: '📝 Mode: ',
     USING_MODEL: 'Using model: ',
-    REPLY_HEADER: '💬 Reply:\n'
-  }
+    REPLY_HEADER: '💬 Reply:\n',
+    SAVED_TO_FILE: '💾 Saved to '
+  },
+  DEFAULT_VALUES: {
+    MODEL: 'openai/gpt-4o-mini',
+    BASE_URL: 'https://openrouter.ai/api/v1',
+    SAVE_PATH: './outputs',
+    TIMEOUT: 30000,
+    MAX_RETRIES: 3
+  },
+  FREE_MODEL_KEYWORDS: ['free', ':free', '-free', '/free'],
+  CODE_MODEL_KEYWORDS: ['coder', 'code', 'mistral', 'qwen', 'llama', 'gemma']
 }));
 
 jest.mock('../../src/shared/utils/auth.js', () => ({
@@ -346,8 +356,8 @@ describe('Code Command', () => {
         fetchModels: jest.fn().mockResolvedValue({
           data: {
             data: [
-              { id: 'free-model:free' },
-              { id: 'another-free-model-free' }
+              { id: 'mistral-coder:free' },
+              { id: 'qwen-code-free' }
             ]
           }
         })
@@ -384,7 +394,7 @@ describe('Code Command', () => {
         }),
         fetchModels: jest.fn().mockResolvedValue({
           data: {
-            data: [{ id: 'free-model:free' }]
+            data: [{ id: 'mistral-coder:free' }]
           }
         })
       };
@@ -397,7 +407,10 @@ describe('Code Command', () => {
         }),
         fetchModels: jest.fn().mockResolvedValue({
           data: {
-            data: [{ id: 'alternate-free-model:free' }]
+            data: [
+              { id: 'mistral-coder:free' }, // This should be skipped (same as first fallback)
+              { id: 'llama-code:free' } // This should be selected (different and matches keywords)
+            ]
           }
         })
       };
@@ -409,9 +422,9 @@ describe('Code Command', () => {
       // Check that all 3 instances were created and used (first fails, second fails with 429, third succeeds)
       expect(firstInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
       expect(secondInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
-      expect(thirdInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
       expect(secondInstance.fetchModels).toHaveBeenCalled(); // First fallback fetches models
       expect(thirdInstance.fetchModels).toHaveBeenCalled(); // Second fallback fetches models
+      expect(thirdInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
     });
   });
 });

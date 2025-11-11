@@ -112,6 +112,7 @@ export async function handleCodeCommand(mode, target, options) {
     // Handle payment required error (402) and try fallback models
     if (err.response?.status === 402 && !options.free) {
       console.log(chalk.yellow('💰 Model requires more credits. Searching for best free model...\n'));
+      let fallback = config.defaultModel; // Declare outside try block for access in catch
       try {
         // Initialize a new API client for fallback operations
         const fallbackApiClient = new ApiClient(config);
@@ -122,7 +123,7 @@ export async function handleCodeCommand(mode, target, options) {
           .map((m) => m.id)
           .filter((id) => /(:free|-free|\/free)/i.test(id));
 
-        let fallback = config.defaultModel; // Use configured default
+        fallback = config.defaultModel; // Use configured default
 
         // If user specified a preferred model type, try to find a match
         if (options.prefer) {
