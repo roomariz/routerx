@@ -1,0 +1,175 @@
+# RouterX
+
+A lightweight CLI for interacting with OpenRouter models and AI services. Provides chat capabilities, model listing, and code assistance directly from your terminal. This is an independent tool that works with OpenRouter's API, not the official OpenRouter CLI.
+
+## Features
+
+- **Chat Interface**: Engage in conversations with various AI models
+- **Code Assistance**: Generate, explain, fix, review, or compare code
+- **Model Discovery**: List and search available AI models
+- **Multiple Provider Support**: Works with OpenRouter and OpenAI APIs
+- **Streaming Responses**: Real-time output for faster feedback
+- **File Output**: Save AI responses directly to files
+- **Configurable Models**: Use your preferred AI model for tasks
+
+## Installation
+
+Install globally using npm:
+
+```bash
+npm install -g routerx
+```
+
+## Prerequisites
+
+You'll need an API key from OpenRouter or OpenAI. Add it to your `.env` file:
+
+```env
+OPENROUTER_API_KEY=your_api_key_here
+# or
+OPENAI_API_KEY=your_api_key_here
+```
+
+## Usage
+
+### Chat with AI Models
+
+```bash
+routerx chat "Hello, how are you?"
+```
+
+Options:
+- `--model <model>`: Specify model name (default: openai/gpt-4o-mini)
+- `--base-url <url>`: Override API base URL
+- `--save <file>`: Save the response to a file
+
+### List Available Models
+
+```bash
+routerx models
+```
+
+Options:
+- `--free`: Show only free models
+- `--search <keyword>`: Filter models by keyword
+
+### Code Assistant
+
+```bash
+routerx code [mode] [target...]
+```
+
+Modes:
+- `generate`: Generate code (default)
+- `explain`: Explain code
+- `fix`: Fix code
+- `review`: Review code
+- `diff`: Compare two files
+
+Options:
+- `--model <model>`: Force specific model ID
+- `--save <path>`: Save output to file
+- `--context <dir>`: Add folder context
+- `--free`: Force only free model fallback
+- `--prefer <keyword>`: Bias model selection
+
+## Examples
+
+Chat with default settings:
+```bash
+routerx chat "What is the weather like today?"
+```
+
+Use a specific model:
+```bash
+routerx chat --model "mistralai/mistral-7b-instruct" "Write a short poem"
+```
+
+Get code help:
+```bash
+routerx code explain mycode.js
+```
+
+Generate code:
+```bash
+routerx code generate "Create a function to calculate factorial in Python"
+```
+
+Compare two files:
+```bash
+routerx code diff file1.js file2.js
+```
+
+Save chat response to file:
+```bash
+routerx chat --save response.txt "Explain quantum computing"
+```
+
+Search for specific models:
+```bash
+routerx models --search "gpt-4"
+```
+
+List only free models:
+```bash
+routerx models --free
+```
+
+## Configuration
+
+RouterX can be configured using multiple methods:
+
+### Environment Variables
+
+Create a `.env` file in your project root or home directory:
+
+```env
+OPENROUTER_API_KEY=your_openrouter_api_key
+OPENAI_API_KEY=your_openai_api_key
+```
+
+RouterX will use `OPENROUTER_API_KEY` if available, otherwise it falls back to `OPENAI_API_KEY`.
+
+### Configuration File
+
+RouterX supports a JSON configuration file to set default values. Create a `config.json` file in your home directory or in the current working directory:
+
+```json
+{
+  "defaultModel": "openai/gpt-4o-mini",
+  "defaultBaseUrl": "https://openrouter.ai/api/v1",
+  "defaultSavePath": "./outputs",
+  "maxRetries": 3,
+  "timeout": 30000
+}
+```
+
+To create your own config file, copy the example:
+
+```bash
+cp node_modules/routerx/config.example.json ~/routerx-config.json
+```
+
+Settings in the config file will override the default values but can be overridden by command-line options.
+
+## Troubleshooting
+
+- **API Key Issues**: Ensure your API keys are properly set in the environment
+- **Model Not Found**: Check that the model ID exists in the available models list
+- **Rate Limiting**: If you encounter rate limit errors, try using different models or wait before retrying
+
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on how to get started.
+
+## Code of Conduct
+
+Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our community approachable and respectful.
+
+## Changelog
+
+See our [Changelog](CHANGELOG.md) for a history of changes and releases.
+
+## License
+
+MIT

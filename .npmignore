@@ -1,0 +1,8 @@
+node_modules
+*.log
+*.txt
+asylum.txt
+fixed.py
+notes/
+.DS_Store
+.env

@@ -1,0 +1,57 @@
+{
+  "name": "routerx",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "routerx": "./index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "cli",
+    "ai",
+    "openrouter",
+    "llm",
+    "chatgpt",
+    "gpt-4",
+    "gpt-4o-mini",
+    "ai-cli",
+    "terminal",
+    "command-line",
+    "ai-tools",
+    "openrouter-api",
+    "configurable"
+  ],
+  "author": {
+    "name": "RouterX Contributors"
+  },
+  "license": "MIT",
+  "description": "A lightweight CLI for interacting with OpenRouter models and AI services. Provides chat capabilities, model listing, and code assistance directly from your terminal.",
+  "homepage": "https://github.com/open-source/routerx#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/open-source/routerx.git"
+  },
+  "bugs": {
+    "url": "https://github.com/open-source/routerx/issues"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "package.json",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "CHANGELOG.md",
+    "config.example.json"
+  ],
+  "dependencies": {
+    "axios": "^1.13.2",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2",
+    "dayjs": "^1.11.19",
+    "dotenv": "^17.2.3"
+  }
+}
