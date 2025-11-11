@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * RouterX - A lightweight CLI for interacting with OpenRouter models
- * 
+ *
  * This CLI provides chat capabilities, model listing, and code assistance
  * using various AI models through the OpenRouter API.
- * 
+ *
  * Features:
  * - Chat interface with streaming responses
  * - Code assistance (generate, explain, fix, review, diff)
@@ -21,53 +21,13 @@ import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { loadConfig, getDefaultConfig } from "./src/config.js";
 
 // Initialize the CLI program using Commander.js
 const program = new Command();
 
-// Configuration loading functions
-function loadConfig() {
-    // Try to load config from multiple locations in order of preference:
-    // 1. Current working directory: ./config.json
-    // 2. User's home directory: ~/routerx-config.json
-    // 3. Default values
-    
-    const configPaths = [
-        path.join(process.cwd(), 'config.json'),
-        path.join(os.homedir(), 'routerx-config.json')
-    ];
-
-    for (const configPath of configPaths) {
-        if (fs.existsSync(configPath)) {
-            try {
-                const configFile = fs.readFileSync(configPath, 'utf8');
-                return { ...getDefaultConfig(), ...JSON.parse(configFile) };
-            } catch (error) {
-                console.warn(`⚠️ Warning: Could not parse config file ${configPath}:`, error.message);
-            }
-        }
-    }
-    
-    // Return default config if no config file is found
-    return getDefaultConfig();
-}
-
-function getDefaultConfig() {
-    return {
-        defaultModel: "openai/gpt-4o-mini",
-        defaultBaseUrl: "https://openrouter.ai/api/v1",
-        defaultSavePath: "./outputs",
-        maxRetries: 3,
-        timeout: 30000
-    };
-}
-
 // Load the configuration
 const config = loadConfig();
-
-program
-    .name("routerx")
-    .description("A lightweight CLI for OpenRouter models");
 
 // -----------------------------------------------------
 // 🔹 Command: Run a chat completion
@@ -90,7 +50,7 @@ program
         // Set default values for model and base URL from config
         const model = options.model || config.defaultModel;
         const baseUrl = options.baseUrl || config.defaultBaseUrl;
-        
+
         // Helper function for timestamp formatting
         const now = () => chalk.dim(`[${dayjs().format("HH:mm:ss")}]`);
 
@@ -186,7 +146,7 @@ program
 
             // Apply filters based on options
             let filtered = models.filter((m) => m.id);
-            
+
             // Filter by free models if requested
             if (options.free) {
                 filtered = filtered.filter(
@@ -196,7 +156,7 @@ program
                         m.pricing?.completion === 0
                 );
             }
-            
+
             // Filter by search keyword if provided
             if (options.search) {
                 const q = options.search.toLowerCase();
@@ -272,10 +232,10 @@ program
                     timeout: config.timeout, // Use timeout from config
                 });
                 const available = res.data?.data?.map((m) => m.id) || [];
-                
+
                 // Find the first preferred model that's available
                 for (const m of preferred) if (available.includes(m)) return m;
-                
+
                 // Fallback to configured default if none found
                 return config.defaultModel;
             } catch {
@@ -294,7 +254,7 @@ program
                 name: f,
                 content: fs.existsSync(f) ? fs.readFileSync(f, "utf-8") : "",
             }));
-            
+
             // Construct prompt based on the mode
             if (modeLower === "diff" && files.length === 2) {
                 // Compare two files
@@ -347,7 +307,7 @@ program
                 if (!savePath.includes('/') && !savePath.includes('\\')) {
                     savePath = path.join(config.defaultSavePath, savePath);
                 }
-                
+
                 const dir = path.dirname(savePath);
                 fs.mkdirSync(dir, { recursive: true }); // Create directory if needed
                 fs.writeFileSync(savePath, reply);
@@ -408,7 +368,7 @@ program
                         if (!savePath.includes('/') && !savePath.includes('\\')) {
                             savePath = path.join(config.defaultSavePath, savePath);
                         }
-                        
+
                         const dir = path.dirname(savePath);
                         fs.mkdirSync(dir, { recursive: true });
                         fs.writeFileSync(savePath, reply2);
@@ -455,7 +415,7 @@ program
                                 if (!savePath.includes('/') && !savePath.includes('\\')) {
                                     savePath = path.join(config.defaultSavePath, savePath);
                                 }
-                                
+
                                 const dir = path.dirname(savePath);
                                 fs.mkdirSync(dir, { recursive: true });
                                 fs.writeFileSync(savePath, reply3);
