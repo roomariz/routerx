@@ -11,7 +11,8 @@
     "test:unit": "node test-runner.js && echo 'Unit tests are in tests/unit/'",
     "test:all": "node --experimental-vm-modules ./node_modules/.bin/jest --no-cache",
     "test:watch": "node --experimental-vm-modules ./node_modules/.bin/jest --watch",
-    "test:coverage": "node --experimental-vm-modules ./node_modules/.bin/jest --coverage --no-cache"
+    "test:coverage": "node --experimental-vm-modules ./node_modules/.bin/jest --coverage --no-cache",
+    "benchmark": "node benchmark.js"
   },
   "keywords": [
     "cli",

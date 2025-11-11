@@ -448,6 +448,16 @@ npm run test:watch          # Run tests in watch mode
 
 For more details about the test suite, see [TESTING.md](./documentation/TESTING.md).
 
+## Documentation
+
+RouterX provides comprehensive documentation covering various aspects of the project:
+
+- **[Contributing Guidelines](./documentation/CONTRIBUTING.md)**: How to contribute to the project
+- **[Code of Conduct](./documentation/CODE_OF_CONDUCT.md)**: Community guidelines and expectations
+- **[Changelog](./documentation/CHANGELOG.md)**: History of changes and releases
+- **[Testing Guide](./documentation/TESTING.md)**: Details about the test suite and how to write tests
+- **[Performance Testing](./documentation/PERFORMANCE.md)**: Performance benchmarks and streaming response metrics
+
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](./documentation/CONTRIBUTING.md) for details on how to get started.
