@@ -1,7 +1,7 @@
 // tests/integration/api-integration.test.js
 import { describe, test, expect, jest } from '@jest/globals';
 import axios from 'axios';
-import ApiClient from '../../src/api/api.js';
+import ApiClient from '../../src/infrastructure/api/index.js';
 
 // Mock axios for integration tests to avoid making real API calls
 jest.mock('axios');

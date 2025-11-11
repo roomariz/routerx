@@ -1,8 +1,8 @@
 // tests/unit/errorHandler.test.js
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import chalk from 'chalk';
-import { ERROR_MESSAGES } from '../../src/constants.js';
-import { handleError, handleAPIError, exitWithError } from '../../src/utils/errorHandler.js';
+import { ERROR_MESSAGES } from '../../src/shared/constants/index.js';
+import { handleError, handleAPIError, exitWithError } from '../../src/shared/utils/error.js';
 
 describe('ErrorHandler', () => {
   // Save original console methods and process.exit

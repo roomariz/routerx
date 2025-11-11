@@ -1,47 +1,76 @@
-// tests/unit/models.test.js
+// tests/unit/models.test.js 
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import { Command } from 'commander';
+import { jest } from '@jest/globals';
 
-// Mock the modules that models.js depends on
-jest.mock('../../src/api/api.js', () => {
-  return jest.fn().mockImplementation(() => ({
-    fetchModels: jest.fn()
+// Mock dependencies BEFORE importing the module under test
+jest.mock('chalk', () => ({
+  yellow: jest.fn((str) => str),
+  green: jest.fn((str) => str)
+}));
+
+// Create a mock instance for the API client
+const mockFetchModels = jest.fn();
+
+// Mock the API client constructor
+const MockApiClientConstructor = jest.fn(() => ({
+  fetchModels: mockFetchModels
+}));
+
+jest.mock('../../src/infrastructure/config/index.js', () => {
+  const mockConfig = {
+    defaultModel: 'test-model',
+    defaultBaseUrl: 'https://test-api.com',
+    defaultSavePath: './outputs'
+  };
+  
+  const MockConfigManager = jest.fn(() => ({
+    loadConfig: jest.fn(() => mockConfig),
+    getDefaultConfig: jest.fn(() => mockConfig),
+    mergeConfig: jest.fn((defaults, loaded) => ({ ...defaults, ...loaded }))
   }));
+
+  return {
+    default: MockConfigManager,
+    ConfigManager: MockConfigManager
+  };
 });
 
-jest.mock('../../src/config/config.js', () => {
-  return jest.fn().mockImplementation(() => ({
-    loadConfig: jest.fn(() => ({
-      defaultModel: 'test-model',
-      defaultBaseUrl: 'https://test-api.com',
-      defaultSavePath: './outputs'
-    }))
-  }));
-});
+jest.mock('../../src/infrastructure/api/index.js', () => ({
+  default: MockApiClientConstructor,
+  ApiClient: MockApiClientConstructor
+}));
 
-jest.mock('../../src/utils/auth.js', () => ({
+jest.mock('../../src/shared/constants/index.js', () => ({
+  ERROR_MESSAGES: {
+    MODEL_FETCH_ERROR: '❌ Failed to fetch model list',
+    MISSING_API_KEY: '❌ Missing API key'
+  }
+}));
+
+jest.mock('../../src/shared/utils/auth.js', () => ({
   validateApiKey: jest.fn()
 }));
 
-jest.mock('../../src/utils/errorHandler.js', () => ({
+jest.mock('../../src/shared/utils/error.js', () => ({
   handleError: jest.fn()
 }));
 
 // Import after mocking
-const { registerModelsCommand } = require('../../src/commands/models.js');
+const { registerModelsCommand } = require('../../src/commands/models/index.js');
 
 describe('Models Command', () => {
   let mockProgram;
-  const { validateApiKey } = require('../../src/utils/auth.js');
-  const { handleError } = require('../../src/utils/errorHandler.js');
-  
+  const { validateApiKey } = require('../../src/shared/utils/auth.js');
+  const { handleError } = require('../../src/shared/utils/error.js');
+
   // Save original console and process
   const originalConsole = { ...console };
 
   beforeEach(() => {
     mockProgram = new Command();
     jest.clearAllMocks();
-    
+
     // Mock console methods to avoid actual logging during tests
     console.log = jest.fn();
     console.error = jest.fn();
@@ -58,11 +87,11 @@ describe('Models Command', () => {
       registerModelsCommand(mockProgram);
 
       const command = mockProgram.commands.find(cmd => cmd.name() === 'models');
-      
+
       expect(command).toBeDefined();
       expect(command.name()).toBe('models');
       expect(command.description()).toBe('List available models (free, paid, or filtered by search keyword)');
-      
+
       // Check options
       const options = command.options;
       expect(options.some(opt => opt.flags.includes('--free'))).toBe(true);
@@ -72,7 +101,7 @@ describe('Models Command', () => {
 
   describe('modelsAction', () => {
     let modelsAction;
-    
+
     beforeEach(() => {
       // Register the command to get the action function
       registerModelsCommand(mockProgram);
@@ -81,13 +110,9 @@ describe('Models Command', () => {
     });
 
     test('fetches and displays models when successful', async () => {
-      // Get the API client instance from the current module - needs to be done early
-      const ApiClient = require('../../src/api/api.js');
-      const apiClientInstance = ApiClient.mock.instances[0];
-      
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
-      
+
       const mockResponse = {
         data: {
           data: [
@@ -97,14 +122,14 @@ describe('Models Command', () => {
           ]
         }
       };
-      
-      apiClientInstance.fetchModels.mockResolvedValue(mockResponse);
-      
+
+      mockFetchModels.mockResolvedValue(mockResponse);
+
       await modelsAction({});
-      
+
       // Verify API was called
-      expect(apiClientInstance.fetchModels).toHaveBeenCalledWith('https://test-api.com');
-      
+      expect(mockFetchModels).toHaveBeenCalledWith('https://test-api.com');
+
       // Check that models were displayed (logging occurred)
       expect(console.log).toHaveBeenCalledWith('\nAvailable models:\n');
       expect(console.log).toHaveBeenCalledWith(
@@ -116,7 +141,7 @@ describe('Models Command', () => {
     test('filters models by free option when provided', async () => {
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
-      
+
       const mockResponse = {
         data: {
           data: [
@@ -126,15 +151,11 @@ describe('Models Command', () => {
           ]
         }
       };
-      
-      // Get the API client instance from the current module
-      const ApiClient = require('../../src/api/api.js');
-      const apiClientInstance = ApiClient.mock.instances[0];
-      
-      apiClientInstance.fetchModels.mockResolvedValue(mockResponse);
-      
+
+      mockFetchModels.mockResolvedValue(mockResponse);
+
       await modelsAction({ free: true });
-      
+
       // Check that only free models were displayed
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('Available models Free:')
@@ -144,7 +165,7 @@ describe('Models Command', () => {
     test('filters models by search keyword when provided', async () => {
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
-      
+
       const mockResponse = {
         data: {
           data: [
@@ -154,15 +175,11 @@ describe('Models Command', () => {
           ]
         }
       };
-      
-      // Get the API client instance from the current module - needs to be done early
-      const ApiClient = require('../../src/api/api.js');
-      const apiClientInstance = ApiClient.mock.instances[0];
-      
-      apiClientInstance.fetchModels.mockResolvedValue(mockResponse);
-      
+
+      mockFetchModels.mockResolvedValue(mockResponse);
+
       await modelsAction({ search: 'mistral' });
-      
+
       // Check that the search was mentioned in the output
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('matching \'mistral\'')
@@ -172,7 +189,7 @@ describe('Models Command', () => {
     test('shows no models message when filtered list is empty', async () => {
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
-      
+
       const mockResponse = {
         data: {
           data: [
@@ -180,15 +197,11 @@ describe('Models Command', () => {
           ]
         }
       };
-      
-      // Get the API client instance from the current module - needs to be done early
-      const ApiClient = require('../../src/api/api.js');
-      const apiClientInstance = ApiClient.mock.instances[0];
-      
-      apiClientInstance.fetchModels.mockResolvedValue(mockResponse);
-      
+
+      mockFetchModels.mockResolvedValue(mockResponse);
+
       await modelsAction({ free: true });  // Looking for free models in paid-only list
-      
+
       // Check that no models found message was shown
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('No models found')
@@ -198,23 +211,19 @@ describe('Models Command', () => {
     test('handles API errors gracefully', async () => {
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
-      
-      // Get the API client instance from the current module - needs to be done early
-      const ApiClient = require('../../src/api/api.js');
-      const apiClientInstance = ApiClient.mock.instances[0];
-      
+
       const mockError = new Error('API Error');
-      
-      apiClientInstance.fetchModels.mockRejectedValue(mockError);
-      
+
+      mockFetchModels.mockRejectedValue(mockError);
+
       await modelsAction({});
-      
+
       expect(handleError).toHaveBeenCalledWith(mockError, 'MODEL_FETCH_ERROR');
     });
 
     test('does not require an API key to run', async () => {
       validateApiKey.mockReturnValue(null);
-      
+
       const mockResponse = {
         data: {
           data: [
@@ -222,46 +231,37 @@ describe('Models Command', () => {
           ]
         }
       };
-      
-      // Get the API client instance from the current module - needs to be done early
-      const ApiClient = require('../../src/api/api.js');
-      const apiClientInstance = ApiClient.mock.instances[0];
-      
-      apiClientInstance.fetchModels.mockResolvedValue(mockResponse);
-      
+
+      mockFetchModels.mockResolvedValue(mockResponse);
+
       await modelsAction({});
-      
+
       // Should still call the API even without an API key
-      expect(apiClientInstance.fetchModels).toHaveBeenCalledWith('https://test-api.com');
+      expect(mockFetchModels).toHaveBeenCalledWith('https://test-api.com');
     });
   });
 
   describe('filterModels function', () => {
-    // Since we can't directly import internal functions, we'll test through the public interface
-    // but verify the filtering logic through the behavior
-    
     test('filters by free models correctly', async () => {
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
-      
+
       const mockResponse = {
         data: {
           data: [
             { id: 'free-model:free', pricing: { prompt: 0 } },
             { id: 'paid-model', pricing: { prompt: 1 } },
-            { id: 'another-free', id: 'free-test-free' }
+            { id: 'another-free-model-free', pricing: { prompt: 0 } }
           ]
         }
       };
-      
-      const ApiClient = require('../../src/api/api.js');
-      const apiClientInstance = ApiClient.mock.instances[0];
-      apiClientInstance.fetchModels.mockResolvedValue(mockResponse);
-      
+
+      mockFetchModels.mockResolvedValue(mockResponse);
+
       await modelsAction({ free: true });
-      
+
       // Verify that only free models would be shown
-      expect(apiClientInstance.fetchModels).toHaveBeenCalled();
+      expect(mockFetchModels).toHaveBeenCalled();
     });
   });
 });

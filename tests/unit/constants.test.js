@@ -1,6 +1,6 @@
 // tests/unit/constants.test.js
 import { describe, test, expect } from '@jest/globals';
-import { CLI_INFO, ERROR_MESSAGES, LOG_MESSAGES, DEFAULT_VALUES, FREE_MODEL_KEYWORDS, CODE_MODEL_KEYWORDS } from '../../src/constants.js';
+import { CLI_INFO, ERROR_MESSAGES, LOG_MESSAGES, DEFAULT_VALUES, FREE_MODEL_KEYWORDS, CODE_MODEL_KEYWORDS } from '../../src/shared/constants/index.js';
 
 describe('Constants', () => {
   describe('CLI_INFO', () => {

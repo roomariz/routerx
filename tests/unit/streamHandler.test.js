@@ -2,10 +2,10 @@
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import fs from 'fs';
 import { Readable, PassThrough } from 'stream';
-import { handleStream } from '../../src/utils/streamHandler.js';
+import { handleStream } from '../../src/shared/utils/stream.js';
 
 // Mock the utilities used in streamHandler
-jest.mock('../../src/utils/fileUtils.js', () => ({
+jest.mock('../../src/shared/utils/file.js', () => ({
   ensureDirectory: jest.fn(),
   formatTimestamp: jest.fn(() => '[12:00:00]'),
   normalizePath: jest.fn((path) => path)
@@ -18,7 +18,7 @@ jest.mock('../../src/constants.js', () => ({
 }));
 
 describe('StreamHandler', () => {
-  const { ensureDirectory, formatTimestamp, normalizePath } = require('../../src/utils/fileUtils.js');
+  const { ensureDirectory, formatTimestamp, normalizePath } = require('../../src/shared/utils/file.js');
 
   beforeEach(() => {
     jest.clearAllMocks();

@@ -3,7 +3,7 @@ import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import fs from 'fs';
 
 // Create a mock for the envLoader module to avoid import issues
-jest.mock('../../src/utils/envLoader.js', () => {
+jest.mock('../../src/infrastructure/env/envLoader.js', () => {
   // Import the actual module but use spies to test the functionality
   const fs = jest.requireActual('fs');
   
@@ -54,7 +54,7 @@ jest.mock('../../src/utils/envLoader.js', () => {
   };
 });
 
-import { loadEnvFile } from '../../src/utils/envLoader.js';
+import { loadEnvFile } from '../../src/infrastructure/env/envLoader.js';
 
 describe('EnvLoader', () => {
   // Save original process.env

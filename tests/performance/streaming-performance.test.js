@@ -2,7 +2,7 @@
 import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 import axios from 'axios';
 import { PassThrough } from 'stream';
-import ApiClient from '../../src/api/api.js';
+import ApiClient from '../../src/infrastructure/api/index.js';
 
 // Mock axios
 jest.mock('axios');

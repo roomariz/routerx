@@ -1,8 +1,3 @@
----
-converted: true
-date: 2025-11-11
----
-
 You are a **senior TypeScript/Node.js architect**.  
 The following CLI project currently exists as a monolithic structure and must be modularised according to **clean architecture**, **maintainability**, and **single-responsibility** principles.
 

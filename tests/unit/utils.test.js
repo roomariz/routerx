@@ -2,7 +2,7 @@
 import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
-import Utils from '../../src/utils/index.js';
+import * as Utils from '../../src/shared/utils/index.js';
 
 // Mock the modules that need to be mocked
 jest.mock('fs');

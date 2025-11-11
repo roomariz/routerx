@@ -3,7 +3,7 @@ import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import { Command } from 'commander';
 
 // Mock external dependencies that would make real API calls
-jest.mock('../../src/api/api.js', () => {
+jest.mock('../../src/infrastructure/api/index.js', () => {
   return jest.fn().mockImplementation(() => ({
     makeChatCompletion: jest.fn(),
     fetchModels: jest.fn(),
@@ -11,7 +11,7 @@ jest.mock('../../src/api/api.js', () => {
   }));
 });
 
-jest.mock('../../src/config/config.js', () => {
+jest.mock('../../src/infrastructure/config/index.js', () => {
   return jest.fn().mockImplementation(() => ({
     loadConfig: jest.fn(() => ({
       defaultModel: 'test-model',
@@ -21,18 +21,18 @@ jest.mock('../../src/config/config.js', () => {
   }));
 });
 
-jest.mock('../../src/utils/auth.js', () => ({
+jest.mock('../../src/shared/utils/auth.js', () => ({
   validateApiKey: jest.fn(() => 'test-api-key'),
   exitWithError: jest.fn()
 }));
 
-jest.mock('../../src/utils/errorHandler.js', () => ({
+jest.mock('../../src/shared/utils/error.js', () => ({
   handleError: jest.fn(),
   handleAPIError: jest.fn(error => error),
   exitWithError: jest.fn()
 }));
 
-jest.mock('../../src/utils/fileUtils.js', () => ({
+jest.mock('../../src/shared/utils/file.js', () => ({
   fileExists: jest.fn(() => true),
   readFileContent: jest.fn(() => 'test file content'),
   writeFileContent: jest.fn(),
@@ -42,14 +42,14 @@ jest.mock('../../src/utils/fileUtils.js', () => ({
   resolvePath: jest.fn(p => p)
 }));
 
-jest.mock('../../src/utils/streamHandler.js', () => ({
+jest.mock('../../src/shared/utils/stream.js', () => ({
   handleStream: jest.fn(() => Promise.resolve())
 }));
 
 // Import after mocking
-const { registerChatCommand } = require('../../src/commands/chat.js');
-const { registerModelsCommand } = require('../../src/commands/models.js');
-const { registerCodeCommand } = require('../../src/commands/code.js');
+const { registerChatCommand } = require('../../src/commands/chat/index.js');
+const { registerModelsCommand } = require('../../src/commands/models/index.js');
+const { registerCodeCommand } = require('../../src/commands/code/index.js');
 
 describe('Command Integration Tests', () => {
   let mockProgram;
@@ -87,7 +87,7 @@ describe('Command Integration Tests', () => {
     }
     
     // Get the API client instance that was created
-    const ApiClient = require('../../src/api/api.js');
+    const ApiClient = require('../../src/infrastructure/api/index.js');
     const apiClientInstance = ApiClient.mock.instances[0];
     const mockStream = { on: jest.fn() };
     apiClientInstance.makeChatCompletion.mockResolvedValue({ data: mockStream });
@@ -115,7 +115,7 @@ describe('Command Integration Tests', () => {
     expect(modelsCmd.description()).toContain('models');
     
     // Get the API client instance that was created
-    const ApiClient = require('../../src/api/api.js');
+    const ApiClient = require('../../src/infrastructure/api/index.js');
     const apiClientInstance = ApiClient.mock.instances[0];
     apiClientInstance.fetchModels.mockResolvedValue({
       data: {
@@ -144,7 +144,7 @@ describe('Command Integration Tests', () => {
     expect(codeCmd.description()).toContain('code');
     
     // Get the API client instance that was created
-    const ApiClient = require('../../src/api/api.js');
+    const ApiClient = require('../../src/infrastructure/api/index.js');
     const apiClientInstance = ApiClient.mock.instances[0];
     apiClientInstance.makeGeneralChat.mockResolvedValue({
       data: {
@@ -173,8 +173,8 @@ describe('Command Integration Tests', () => {
     const codeAction = codeCmd._actionHandler._fn;
     
     // Mock dependencies
-    const ApiClient = require('../../src/api/api.js');
-    const { fileExists, readFileContent } = require('../../src/utils/fileUtils.js');
+    const ApiClient = require('../../src/infrastructure/api/index.js');
+    const { fileExists, readFileContent } = require('../../src/shared/utils/file.js');
     const apiClientInstance = ApiClient.mock.instances[0];
     
     // Mock files for the explain mode
@@ -210,7 +210,7 @@ describe('Command Integration Tests', () => {
     const chatAction = chatCmd._actionHandler._fn;
     
     // Get the API client instance that was created
-    const ApiClient = require('../../src/api/api.js');
+    const ApiClient = require('../../src/infrastructure/api/index.js');
     const apiClientInstance = ApiClient.mock.instances[0];
     const mockStream = { on: jest.fn() };
     apiClientInstance.makeChatCompletion.mockResolvedValue({ data: mockStream });

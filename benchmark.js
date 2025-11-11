@@ -7,9 +7,8 @@
  */
 
 import fs from 'fs';
-import ApiClient from './src/api/api.js';
-import ConfigManager from './src/config/config.js';
-import Utils from './src/utils/index.js';
+import ApiClient from './src/infrastructure/api/index.js';
+import ConfigManager from './src/infrastructure/config/index.js';
 
 // Simple environment loading without external dependencies
 function loadEnv() {

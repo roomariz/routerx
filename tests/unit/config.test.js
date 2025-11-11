@@ -3,7 +3,7 @@ import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globa
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import ConfigManager from '../../src/config/config.js';
+import ConfigManager from '../../src/infrastructure/config/index.js';
 
 // Mock the modules that need to be mocked
 jest.mock('fs');

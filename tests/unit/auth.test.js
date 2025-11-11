@@ -1,6 +1,6 @@
 // tests/unit/auth.test.js
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { validateApiKey } from '../../src/utils/auth.js';
+import { validateApiKey } from '../../src/shared/utils/auth.js';
 
 describe('Auth Utilities', () => {
   // Save original process.env
