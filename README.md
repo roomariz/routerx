@@ -158,6 +158,92 @@ Settings in the config file will override the default values but can be overridd
 - **Model Not Found**: Check that the model ID exists in the available models list
 - **Rate Limiting**: If you encounter rate limit errors, try using different models or wait before retrying
 
+## Architecture
+
+RouterX follows a modular architecture with the following structure:
+
+```
+.
+├── index.js                 # Main CLI entry point
+├── jest.config.js           # Jest configuration
+├── test-runner.js           # Development test helper
+├── package.json
+├── README.md
+├── src/                    # Source code
+│   ├── api/                # API client and communication logic
+│   │   └── api.js          # ApiClient class for handling API requests
+│   ├── config/             # Configuration management
+│   │   └── config.js       # ConfigManager class for loading settings
+│   ├── utils/              # Utility functions
+│   │   └── index.js        # Common utility functions
+│   └── constants.js        # Application constants and messages
+└── tests/                  # Test files
+    ├── integration/        # Integration tests
+    │   └── cli.test.js
+    ├── unit/               # Unit tests
+    │   ├── api.test.js
+    │   ├── commander.test.js
+    │   └── config.test.js
+    └── testUtils.js        # Test utilities
+```
+
+### API Module
+- Handles all API communications with AI services
+- Implements proper error handling and response parsing
+- Supports both streaming and non-streaming requests
+
+### Config Module
+- Manages application configuration loading
+- Supports multiple configuration sources
+- Validates and merges configuration values
+
+### Utils Module
+- Provides common utility functions
+- File system operations with proper error handling
+- Path normalization and timestamp formatting
+
+### Constants Module
+- Centralized constants for error messages, log messages, and default values
+- Improves maintainability and consistency
+
+## Development
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/routerx.git
+   cd routerx
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Run in development mode:
+   ```bash
+   node index.js chat "Hello from development mode!"
+   ```
+
+4. Run tests:
+   ```bash
+   npm test
+   ```
+
+### Test Structure
+
+RouterX has a comprehensive test suite organized as follows:
+
+- **Unit Tests** (`tests/unit/`): Test individual functions and modules in isolation
+- **Integration Tests** (`tests/integration/`): Test how different modules work together
+- **Test Utilities** (`tests/testUtils.js`): Shared utilities for testing
+
+The project uses Jest for testing with proper ESM module support configured in `jest.config.js`.
+
+To run tests with coverage:
+```bash
+npm test
+```
+
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on how to get started.

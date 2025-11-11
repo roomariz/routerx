@@ -1,0 +1,82 @@
+// src/config/config.js
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+/**
+ * Configuration Manager for RouterX
+ * Handles loading and managing application configuration
+ */
+class ConfigManager {
+  constructor() {
+    this.defaultConfig = {
+      defaultModel: "openai/gpt-4o-mini",
+      defaultBaseUrl: "https://openrouter.ai/api/v1",
+      defaultSavePath: "./outputs",
+      maxRetries: 3,
+      timeout: 30000
+    };
+  }
+
+  /**
+   * Get the default configuration
+   * @returns {Object} Default configuration object
+   */
+  getDefaultConfig() {
+    return this.defaultConfig;
+  }
+
+  /**
+   * Load configuration from file or return defaults
+   * @returns {Object} Loaded configuration object
+   */
+  loadConfig() {
+    // Try to load config from multiple locations in order of preference:
+    // 1. Current working directory: ./config.json
+    // 2. User's home directory: ~/routerx-config.json
+    // 3. Default values
+
+    const configPaths = [
+      path.join(process.cwd(), 'config.json'),
+      path.join(os.homedir(), 'routerx-config.json')
+    ];
+
+    for (const configPath of configPaths) {
+      if (fs.existsSync(configPath)) {
+        try {
+          const configFile = fs.readFileSync(configPath, 'utf8');
+          const parsedConfig = JSON.parse(configFile);
+          
+          // Validate and merge configuration
+          return this.mergeConfig(this.getDefaultConfig(), parsedConfig);
+        } catch (error) {
+          console.warn(`⚠️ Warning: Could not parse config file ${configPath}:`, error.message);
+        }
+      }
+    }
+
+    // Return default config if no config file is found
+    return this.getDefaultConfig();
+  }
+
+  /**
+   * Merge default config with loaded config, ensuring all required fields are present
+   * @param {Object} defaultConfig - Default configuration values
+   * @param {Object} loadedConfig - Configuration loaded from file
+   * @returns {Object} Merged configuration
+   */
+  mergeConfig(defaultConfig, loadedConfig) {
+    const merged = { ...defaultConfig };
+    
+    // Only merge properties that exist in the default config
+    for (const [key, value] of Object.entries(loadedConfig)) {
+      if (key in defaultConfig) {
+        merged[key] = value;
+      }
+    }
+    
+    return merged;
+  }
+}
+
+export default ConfigManager;
