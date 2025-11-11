@@ -349,7 +349,7 @@ Settings in the config file will override the default values but can be overridd
 
 ## Architecture
 
-RouterX follows a modular architecture with the following structure:
+RouterX follows a modular architecture based on clean architecture principles with the following structure:
 
 ```
 .
@@ -358,15 +358,56 @@ RouterX follows a modular architecture with the following structure:
 ├── test-runner.js           # Development test helper
 ├── package.json
 ├── README.md
+├── bin/                    # Executable files
+│   └── routerx.js          # CLI executable
 ├── src/                    # Source code
-│   ├── api/                # API client and communication logic
-│   │   └── api.js          # ApiClient class for handling API requests
-│   ├── config/             # Configuration management
-│   │   └── config.js       # ConfigManager class for loading settings
-│   ├── utils/              # Utility functions
-│   │   └── index.js        # Common utility functions
-│   └── constants.js        # Application constants and messages
+│   ├── cli/                # CLI application entry points and registration
+│   │   ├── bootstrap.js    # Main CLI initialization
+│   │   ├── registerCommands.js # Dynamic command loader
+│   │   └── program.js      # Commander.js instance setup
+│   ├── commands/           # Individual command modules
+│   │   ├── chat/           # Chat command functionality
+│   │   │   ├── command.js  # Command registration
+│   │   │   ├── handler.js  # Business logic
+│   │   │   └── index.js    # Module exports
+│   │   ├── models/         # Models command functionality
+│   │   │   ├── command.js  # Command registration
+│   │   │   ├── handler.js  # Business logic
+│   │   │   └── index.js    # Module exports
+│   │   └── code/           # Code command functionality
+│   │       ├── command.js  # Command registration
+│   │       ├── handler.js  # Business logic
+│   │       └── index.js    # Module exports
+│   ├── infrastructure/     # External service integration
+│   │   ├── api/            # API client and interactions
+│   │   │   ├── apiClient.js # HTTP client and API interactions
+│   │   │   └── index.js    # Export module interface
+│   │   ├── config/         # Configuration management
+│   │   │   ├── configManager.js # Configuration loading and management
+│   │   │   └── index.js    # Export module interface
+│   │   └── env/            # Environment handling
+│   │       ├── envLoader.js # Environment variable loading
+│   │       └── index.js    # Export module interface
+│   ├── shared/             # Cross-cutting utilities and constants
+│   │   ├── constants/      # Application constants
+│   │   │   ├── cli.js      # CLI-related constants
+│   │   │   ├── error.js    # Error message constants
+│   │   │   ├── log.js      # Logging message constants
+│   │   │   ├── default.js  # Default values and keywords
+│   │   │   └── index.js    # Export all constants
+│   │   └── utils/          # Shared utility functions
+│   │       ├── auth.js     # API key validation
+│   │       ├── error.js    # Error handling utilities
+│   │       ├── file.js     # File operations
+│   │       ├── stream.js   # Stream handling utilities
+│   │       └── index.js    # Export all utilities
+│   └── core/               # Core application logic
+│       └── index.js        # Main library exports
 └── tests/                  # Test files
+    ├── cli/                # CLI-specific tests
+    ├── commands/           # Command-specific tests
+    ├── infrastructure/     # Infrastructure tests
+    ├── shared/             # Shared utilities tests
     ├── integration/        # Integration tests
     │   └── cli.test.js
     ├── unit/               # Unit tests
@@ -376,24 +417,26 @@ RouterX follows a modular architecture with the following structure:
     └── testUtils.js        # Test utilities
 ```
 
-### API Module
-- Handles all API communications with AI services
-- Implements proper error handling and response parsing
-- Supports both streaming and non-streaming requests
+### CLI Domain
+- Handles CLI application entry points and command registration
+- Manages the overall CLI lifecycle and initialization
 
-### Config Module
-- Manages application configuration loading
-- Supports multiple configuration sources
-- Validates and merges configuration values
+### Commands Domain
+- Individual command modules with clear separation between registration and business logic
+- Each command (chat, models, code) is a separate module with dedicated functionality
 
-### Utils Module
-- Provides common utility functions
-- File system operations with proper error handling
-- Path normalization and timestamp formatting
+### Infrastructure Domain
+- API client and communication logic with external services
+- Configuration management with support for multiple configuration sources
+- Environment handling and variable loading
 
-### Constants Module
-- Centralized constants for error messages, log messages, and default values
-- Improves maintainability and consistency
+### Shared Domain
+- Cross-cutting utilities and constants used across the application
+- Centralized error messages, logging messages, and default values
+- Common file operations, error handling, and stream processing utilities
+
+### Core Domain
+- Main library exports and core application logic
 
 ## Development
 
@@ -410,7 +453,7 @@ RouterX follows a modular architecture with the following structure:
 
 3. Run in development mode:
    ```bash
-   node index.js chat "Hello from development mode!"
+   node bin/routerx.js chat "Hello from development mode!"
    ```
 
 4. Run tests:
@@ -420,7 +463,7 @@ RouterX follows a modular architecture with the following structure:
 
 ### Test Structure
 
-RouterX has a comprehensive test suite to ensure functionality and catch regressions, organized as follows:
+RouterX has a comprehensive test suite to ensure functionality and catch regressions, organized with a modular structure that mirrors the source code:
 
 - **Unit Tests** (`tests/unit/`): Test individual functions and modules in isolation
   - `api.test.js`: API client functionality and error handling
@@ -429,10 +472,26 @@ RouterX has a comprehensive test suite to ensure functionality and catch regress
   - `commander.test.js`: CLI command structure and option parsing
   - `constants.test.js`: Constants and configuration values validation
 
+- **Command Tests** (`tests/commands/`): Test individual command functionality
+  - `chat.test.js`: Chat command business logic
+  - `models.test.js`: Models command business logic
+  - `code.test.js`: Code command business logic
+
+- **Infrastructure Tests** (`tests/infrastructure/`): Test infrastructure components
+  - `apiClient.test.js`: API client functionality
+  - `configManager.test.js`: Configuration management
+  - `envLoader.test.js`: Environment loading utilities
+
+- **Shared Tests** (`tests/shared/`): Test shared utilities and constants
+  - `utils/file.test.js`: File operations testing
+  - `utils/auth.test.js`: Authentication utilities testing
+
 - **Integration Tests** (`tests/integration/`): Test how different modules work together
   - `cli.test.js`: CLI integration and error handling
   - `api-integration.test.js`: API integration with mocked responses
   - `cli-full.test.js`: Full CLI functionality tests
+  - `cli-integration.test.js`: CLI command integration tests
+  - `command-integration.test.js`: Command integration tests
 
 - **Test Utilities** (`tests/testUtils.js`): Shared utilities for testing
 

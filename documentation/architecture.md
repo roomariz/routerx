@@ -55,6 +55,12 @@ src/
 To run the CLI:
 
 ```bash
+npx routerx --help
+```
+
+Or for development:
+
+```bash
 node bin/routerx.js --help
 ```
 

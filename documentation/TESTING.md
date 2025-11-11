@@ -18,6 +18,30 @@ Located in: `tests/unit/`
 - `utils.test.js` - Tests for utility functions
 - `commander.test.js` - Tests for CLI command structure
 - `constants.test.js` - Tests for constants and configuration values
+- `auth.test.js` - Tests for authentication utilities
+- `errorHandler.test.js` - Tests for error handling utilities
+- `streamHandler.test.js` - Tests for stream handling utilities
+- `envLoader.test.js` - Tests for environment loading
+
+### Command Tests
+Located in: `tests/commands/`
+
+- `chat.test.js` - Tests for chat command functionality
+- `models.test.js` - Tests for models command functionality
+- `code.test.js` - Tests for code command functionality
+
+### Infrastructure Tests
+Located in: `tests/infrastructure/`
+
+- `apiClient.test.js` - Tests for API client functionality
+- `configManager.test.js` - Tests for configuration management
+- `envLoader.test.js` - Tests for environment loading utilities
+
+### Shared Tests
+Located in: `tests/shared/`
+
+- `utils/file.test.js` - Tests for file operations
+- `utils/auth.test.js` - Tests for authentication utilities
 
 ### Integration Tests
 Located in: `tests/integration/`
@@ -25,6 +49,8 @@ Located in: `tests/integration/`
 - `cli.test.js` - Tests for CLI integration and error handling
 - `api-integration.test.js` - Tests for API integration with mocked responses
 - `cli-full.test.js` - Tests for full CLI functionality
+- `cli-integration.test.js` - Tests for CLI command integration
+- `command-integration.test.js` - Tests for command integration
 
 ## Running Tests
 
