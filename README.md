@@ -75,9 +75,25 @@ Options:
 
 ## Examples
 
+### Chat Commands
+
 Chat with default settings:
 ```bash
 routerx chat "What is the weather like today?"
+```
+
+Sample output:
+```
+[2023-11-11T10:30:00.000Z] 🧠 Sending to model: openai/gpt-4o-mini
+[2023-11-11T10:30:00.000Z] 🔗 API Base URL: https://openrouter.ai/api/v1
+[2023-11-11T10:30:00.000Z] 📝 Prompt: "What is the weather like today?"
+[2023-11-11T10:30:00.000Z] 💬 Reply (streaming):
+
+I don't have access to real-time weather data, but I can help you find current weather information.
+You can check weather services like Weather.com, AccuWeather, or use a weather app on your phone.
+If you tell me your location, I can suggest how to find weather information for your area.
+
+[2023-11-11T10:30:05.000Z] ✅ Stream complete.
 ```
 
 Use a specific model:
@@ -85,19 +101,24 @@ Use a specific model:
 routerx chat --model "mistralai/mistral-7b-instruct" "Write a short poem"
 ```
 
-Get code help:
-```bash
-routerx code explain mycode.js
+Sample output:
 ```
+[2023-11-11T10:35:00.000Z] 🧠 Sending to model: mistralai/mistral-7b-instruct
+[2023-11-11T10:35:00.000Z] 🔗 API Base URL: https://openrouter.ai/api/v1
+[2023-11-11T10:35:00.000Z] 📝 Prompt: "Write a short poem"
+[2023-11-11T10:35:00.000Z] 💬 Reply (streaming):
 
-Generate code:
-```bash
-routerx code generate "Create a function to calculate factorial in Python"
-```
+In the quiet of dawn's embrace,
+Where light whispers to the sky,
+A gentle breeze brings nature's grace,
+As birds prepare to say goodbye.
 
-Compare two files:
-```bash
-routerx code diff file1.js file2.js
+The world awakens, fresh and new,
+With colors painted bright and bold,
+The morning sun with golden hue,
+Creates a story yet untold.
+
+[2023-11-11T10:35:08.000Z] ✅ Stream complete.
 ```
 
 Save chat response to file:
@@ -105,14 +126,182 @@ Save chat response to file:
 routerx chat --save response.txt "Explain quantum computing"
 ```
 
+Sample output:
+```
+[2023-11-11T10:40:00.000Z] 🧠 Sending to model: openai/gpt-4o-mini
+[2023-11-11T10:40:00.000Z] 🔗 API Base URL: https://openrouter.ai/api/v1
+[2023-11-11T10:40:00.000Z] 📝 Prompt: "Explain quantum computing"
+[2023-11-11T10:40:00.000Z] 💬 Reply (streaming):
+
+Quantum computing is a type of computing that uses quantum mechanics to process information.
+Unlike classical computers that use bits with values of 0 or 1, quantum computers use quantum bits (qubits)
+that can exist in multiple states simultaneously through superposition.
+
+Key principles include:
+- Superposition: Qubits can represent multiple states at once
+- Entanglement: Qubits can be linked in ways that classical bits cannot
+- Quantum interference: Used to amplify correct solutions and cancel wrong ones
+
+Quantum computers have potential applications in cryptography, drug discovery, and solving complex optimization problems.
+
+[2023-11-11T10:40:15.000Z] ✅ Stream complete. Saved to response.txt
+```
+
+### Code Assistant Commands
+
+Get code help:
+```bash
+routerx code explain mycode.js
+```
+
+Sample output:
+```
+🧠 Using model: openai/gpt-4o-mini
+📝 Mode: explain
+
+💬 Reply:
+This JavaScript code implements a simple calculator with functions for addition, subtraction, multiplication, and division. The code includes error handling for division by zero and exports the functions for use in other modules. The calculator functions take two numeric parameters and return the result of the operation.
+
+[2023-11-11T11:00:00.000Z] 💾 Saved to outputs/explanation.txt
+```
+
+Generate code:
+```bash
+routerx code generate "Create a function to calculate factorial in Python"
+```
+
+Sample output:
+```
+🧠 Using model: openai/gpt-4o-mini
+📝 Mode: generate
+
+💬 Reply:
+```python
+def factorial(n):
+    """Calculate the factorial of n."""
+    if n < 0:
+        raise ValueError("Factorial is not defined for negative numbers")
+    if n == 0 or n == 1:
+        return 1
+    result = 1
+    for i in range(2, n + 1):
+        result *= i
+    return result
+
+# Example usage:
+print(factorial(5))  # Output: 120
+```
+
+Compare two files:
+```bash
+routerx code diff file1.js file2.js
+```
+
+Sample output:
+```
+🧠 Using model: openai/gpt-4o-mini
+📝 Mode: diff
+
+💬 Reply:
+The key differences between the two files are:
+
+1. Function naming: file1.js uses 'calculateSum' while file2.js uses 'addNumbers'
+2. Input validation: file2.js includes additional checks for numeric inputs
+3. Return statement: file2.js has more detailed error handling for non-numeric inputs
+4. Comment style: file2.js includes more comprehensive documentation comments
+
+Overall, file2.js is more robust with better error handling and clearer documentation.
+```
+
+Fix code issues:
+```bash
+routerx code fix buggy.js
+```
+
+Sample output:
+```
+🧠 Using model: openai/gpt-4o-mini
+📝 Mode: fix
+
+💬 Reply:
+```javascript
+function calculateTotal(items) {
+  if (!Array.isArray(items)) {
+    throw new Error('Items must be an array');
+  }
+  
+  let total = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (typeof items[i].price === 'number') {
+      total += items[i].price;
+    }
+  }
+  return total;
+}
+```
+
+The main fixes included:
+1. Added array validation check
+2. Fixed the undefined variable issue
+3. Added proper type checking for price values
+```
+
+### Model Discovery Commands
+
+List available models:
+```bash
+routerx models
+```
+
+Sample output:
+```
+📡 Fetching model list...
+
+🧠 Available Models:
+
+• openai/gpt-4o                     | Paid
+• openai/gpt-4o-mini                | Paid
+• anthropic/claude-3.5-sonnet       | Paid
+• google/gemini-pro-1.5             | Paid
+• mistralai/mistral-7b-instruct     | Paid
+• openchat/openchat-7b              | Free
+• pygmalionai/mythalion-13b         | Free
+• huggingfaceh4/zephyr-7b-beta      | Free
+```
+
 Search for specific models:
 ```bash
 routerx models --search "gpt-4"
 ```
 
+Sample output:
+```
+📡 Fetching model list...
+
+🧠 Available Models matching 'gpt-4':
+
+• openai/gpt-4o                     | Paid
+• openai/gpt-4o-mini                | Paid
+• openai/gpt-4-turbo                | Paid
+• openai/gpt-4                      | Paid
+```
+
 List only free models:
 ```bash
 routerx models --free
+```
+
+Sample output:
+```
+📡 Fetching model list...
+
+🧠 Available Models Free:
+
+• openchat/openchat-7b              | Free
+• pygmalionai/mythalion-13b         | Free
+• huggingfaceh4/zephyr-7b-beta      | Free
+• cognitivecomputations/dolphin-mixtral-8x7b  | Free
+• databricks/dbrx-instruct          | Free
 ```
 
 ## Configuration
