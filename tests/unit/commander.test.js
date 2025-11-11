@@ -52,7 +52,9 @@ describe('Commander.js Structure', () => {
     // Verify that arguments were added correctly
     const args = cmd._args;
     expect(args.length).toBe(1);
-    expect(args[0].name).toBe('prompt');
+    // The name property might be a method in newer versions, so check for both
+    const argName = typeof args[0].name === 'function' ? args[0].name() : args[0].name;
+    expect(argName).toMatch(/prompt/);
     expect(args[0].description).toBe('Prompt to process');
   });
 

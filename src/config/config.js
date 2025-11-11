@@ -36,9 +36,28 @@ class ConfigManager {
     // 2. User's home directory: ~/routerx-config.json
     // 3. Default values
 
+    const homeDir = os.homedir();
+    if (!homeDir) {
+      // If os.homedir() returns null/undefined, only check current directory
+      const configPath = path.join(process.cwd(), 'config.json');
+      if (fs.existsSync(configPath)) {
+        try {
+          const configFile = fs.readFileSync(configPath, 'utf8');
+          const parsedConfig = JSON.parse(configFile);
+
+          // Validate and merge configuration
+          return this.mergeConfig(this.getDefaultConfig(), parsedConfig);
+        } catch (error) {
+          console.warn(`⚠️ Warning: Could not parse config file ${configPath}:`, error.message);
+        }
+      }
+      // Return default config if no config file is found
+      return this.getDefaultConfig();
+    }
+
     const configPaths = [
       path.join(process.cwd(), 'config.json'),
-      path.join(os.homedir(), 'routerx-config.json')
+      path.join(homeDir, 'routerx-config.json')
     ];
 
     for (const configPath of configPaths) {
@@ -66,6 +85,10 @@ class ConfigManager {
    * @returns {Object} Merged configuration
    */
   mergeConfig(defaultConfig, loadedConfig) {
+    if (!loadedConfig) {
+      return { ...defaultConfig };
+    }
+    
     const merged = { ...defaultConfig };
     
     // Only merge properties that exist in the default config

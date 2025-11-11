@@ -29,11 +29,10 @@ describe('API Integration Tests', () => {
       const mockBaseUrl = 'https://openrouter.ai/api/v1';
       
       // Mock the successful API response
-      const mockAxios = require('axios');
       const mockStream = { on: jest.fn() };
       const mockResponse = { data: mockStream };
 
-      mockAxios.mockResolvedValue(mockResponse);
+      axios.mockResolvedValue(mockResponse);
 
       const response = await apiClient.makeChatCompletion(
         mockApiKey,
@@ -42,7 +41,7 @@ describe('API Integration Tests', () => {
         mockBaseUrl
       );
 
-      expect(mockAxios).toHaveBeenCalledWith(
+      expect(axios).toHaveBeenCalledWith(
         expect.objectContaining({
           method: "post",
           url: `${mockBaseUrl}/chat/completions`,
@@ -68,14 +67,13 @@ describe('API Integration Tests', () => {
       const mockBaseUrl = 'https://openrouter.ai/api/v1';
       
       // Mock an API response with 401 error
-      const mockAxios = require('axios');
       const errorResponse = {
         response: {
           status: 401,
           data: { error: { message: 'Authentication failed' } }
         }
       };
-      mockAxios.mockRejectedValue(errorResponse);
+      axios.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.makeChatCompletion(mockApiKey, mockModel, mockPrompt, mockBaseUrl)
@@ -89,14 +87,13 @@ describe('API Integration Tests', () => {
       const mockBaseUrl = 'https://openrouter.ai/api/v1';
       
       // Mock an API response with 429 error
-      const mockAxios = require('axios');
       const errorResponse = {
         response: {
           status: 429,
           data: { error: { message: 'Rate limit exceeded' } }
         }
       };
-      mockAxios.mockRejectedValue(errorResponse);
+      axios.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.makeChatCompletion(mockApiKey, mockModel, mockPrompt, mockBaseUrl)
@@ -113,16 +110,14 @@ describe('API Integration Tests', () => {
         { id: 'google/gemini-pro', name: 'Gemini Pro' }
       ];
       
-      // Mock the successful API response
-      const mockAxios = require('axios');
       const mockResponse = {
         data: { data: mockModels }
       };
-      mockAxios.get.mockResolvedValue(mockResponse);
+      axios.get.mockResolvedValue(mockResponse);
 
       const response = await apiClient.fetchModels(mockBaseUrl);
       
-      expect(mockAxios.get).toHaveBeenCalledWith(`${mockBaseUrl}/models`);
+      expect(axios.get).toHaveBeenCalledWith(`${mockBaseUrl}/models`);
       expect(response.data.data).toEqual(mockModels);
     });
 
@@ -130,14 +125,13 @@ describe('API Integration Tests', () => {
       const mockBaseUrl = 'https://openrouter.ai/api/v1';
       
       // Mock an API response with 500 error
-      const mockAxios = require('axios');
       const errorResponse = {
         response: {
           status: 500,
           data: { error: { message: 'Server error' } }
         }
       };
-      mockAxios.get.mockRejectedValue(errorResponse);
+      axios.get.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.fetchModels(mockBaseUrl)
@@ -157,9 +151,7 @@ describe('API Integration Tests', () => {
         }
       };
       
-      // Mock the successful API response
-      const mockAxios = require('axios');
-      mockAxios.post.mockResolvedValue(mockResponse);
+      axios.post.mockResolvedValue(mockResponse);
 
       const response = await apiClient.makeGeneralChat(
         mockApiKey,
@@ -168,7 +160,7 @@ describe('API Integration Tests', () => {
         mockBaseUrl
       );
 
-      expect(mockAxios.post).toHaveBeenCalledWith(
+      expect(axios.post).toHaveBeenCalledWith(
         `${mockBaseUrl}/chat/completions`,
         { model: mockModel, messages: [{ role: "user", content: mockPrompt }] },
         {
@@ -187,15 +179,13 @@ describe('API Integration Tests', () => {
       const mockPrompt = 'test prompt';
       const mockBaseUrl = 'https://openrouter.ai/api/v1';
       
-      // Mock an API response with 400 error
-      const mockAxios = require('axios');
       const errorResponse = {
         response: {
           status: 400,
           data: { error: { message: 'Invalid request' } }
         }
       };
-      mockAxios.post.mockRejectedValue(errorResponse);
+      axios.post.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.makeGeneralChat(mockApiKey, mockModel, mockPrompt, mockBaseUrl)

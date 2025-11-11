@@ -37,6 +37,8 @@ describe('ConfigManager', () => {
 
   describe('loadConfig', () => {
     test('returns default config when no config files exist', () => {
+      // Mock os.homedir to return a valid path
+      os.homedir = jest.fn().mockReturnValue('/home/user');
       // Mock fs.existsSync to return false for all config paths
       fs.existsSync = jest.fn().mockReturnValue(false);
 

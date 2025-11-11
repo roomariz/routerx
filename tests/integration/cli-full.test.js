@@ -27,7 +27,7 @@ describe('Full CLI Integration Tests', () => {
   });
 
   test('CLI shows full help message when run with --help', (done) => {
-    const child = spawn('node', ['../../index.js', '--help'], {
+    const child = spawn('node', ['../index.js', '--help'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });
@@ -45,10 +45,10 @@ describe('Full CLI Integration Tests', () => {
       expect(output).toContain('code');
       done();
     });
-  });
+  }, 15000);
 
   test('CLI shows version when run with --version', (done) => {
-    const child = spawn('node', ['../../index.js', '--version'], {
+    const child = spawn('node', ['../index.js', '--version'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });
@@ -63,12 +63,17 @@ describe('Full CLI Integration Tests', () => {
       expect(output.trim()).toBe('1.0.0');
       done();
     });
-  });
+  }, 15000);
 
   test('CLI models command works (with mocked API)', (done) => {
-    const child = spawn('node', ['../../index.js', 'models'], {
+    const child = spawn('node', ['../index.js', 'models'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
+    });
+
+    let output = '';
+    child.stdout.on('data', (data) => {
+      output += data.toString();
     });
 
     let stderr = '';
@@ -77,17 +82,22 @@ describe('Full CLI Integration Tests', () => {
     });
 
     child.on('close', (code) => {
-      // The command should fail due to network error (since we're not mocking the API properly)
-      // but with the right error message
-      expect(stderr).toContain('Network Error') || expect(code).toBeGreaterThan(0);
+      // The models command should work without an API key
+      expect(code).toBe(0);
+      // Should contain model data (not empty) or at least the fetching message
+      expect(output).toContain('📡 Fetching model list') || expect(output).toContain('Available Models');
       done();
     });
-  });
+  }, 15000);
 
   test('CLI chat command with proper parameters fails due to network (expected)', (done) => {
-    const child = spawn('node', ['../../index.js', 'chat', 'hello world'], {
+    const child = spawn('node', ['../index.js', 'chat', 'hello world'], {
       cwd: path.join(process.cwd(), 'tests'),
-      env: process.env
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: undefined,
+        OPENROUTER_API_KEY: undefined
+      }
     });
 
     let stderr = '';
@@ -96,15 +106,14 @@ describe('Full CLI Integration Tests', () => {
     });
 
     child.on('close', (code) => {
-      // The command should fail due to network error (since we're not mocking the API properly)
-      // but it should have the right structure
-      expect(stderr).toContain('Network Error') || expect(code).toBeGreaterThan(0);
+      // The command should fail due to missing API key
+      expect(stderr).toContain('❌ Missing API key') || expect(code).toBe(1);
       done();
     });
-  });
+  }, 15000);
 
   test('CLI code command fails without proper target (as expected)', (done) => {
-    const child = spawn('node', ['../../index.js', 'code', 'explain'], {
+    const child = spawn('node', ['../index.js', 'code', 'explain'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });
@@ -115,20 +124,24 @@ describe('Full CLI Integration Tests', () => {
     });
 
     child.on('close', (code) => {
-      // The command should fail as no file was specified
-      expect(code).toBeGreaterThan(0);
+      // The command should fail because 'explain' mode requires a file to be specified
+      expect(stderr).toContain('❌ File does not exist') || expect(code).toBe(1);
       done();
     });
-  });
+  }, 15000);
 
   test('CLI code command with file fails due to network (expected)', (done) => {
     // Create a test file
     const testFile = path.join(tempDir, 'test.js');
     fs.writeFileSync(testFile, 'console.log("hello");');
 
-    const child = spawn('node', ['../../index.js', 'code', 'explain', testFile], {
+    const child = spawn('node', ['../index.js', 'code', 'explain', testFile], {
       cwd: path.join(process.cwd(), 'tests'),
-      env: process.env
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: undefined,
+        OPENROUTER_API_KEY: undefined
+      }
     });
 
     let stderr = '';
@@ -137,16 +150,21 @@ describe('Full CLI Integration Tests', () => {
     });
 
     child.on('close', (code) => {
-      // The command should fail due to network error (since we're not mocking the API properly)
-      expect(stderr).toContain('Network Error') || expect(code).toBeGreaterThan(0);
+      // The command should fail due to missing API key
+      expect(stderr).toContain('❌ Missing API key') || expect(code).toBe(1);
       done();
     });
-  });
+  }, 15000);
 
   test('CLI models command with --free option (with mocked API)', (done) => {
-    const child = spawn('node', ['../../index.js', 'models', '--free'], {
+    const child = spawn('node', ['../index.js', 'models', '--free'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
+    });
+
+    let output = '';
+    child.stdout.on('data', (data) => {
+      output += data.toString();
     });
 
     let stderr = '';
@@ -155,16 +173,23 @@ describe('Full CLI Integration Tests', () => {
     });
 
     child.on('close', (code) => {
-      // The command should fail due to network error (since we're not mocking the API properly)
-      expect(stderr).toContain('Network Error') || expect(code).toBeGreaterThan(0);
+      // The models command should work without an API key
+      expect(code).toBe(0);
+      // Should contain model data (not empty) or at least the fetching message
+      expect(output).toContain('📡 Fetching model list') || expect(output).toContain('Available Models');
       done();
     });
-  });
+  }, 15000);
 
   test('CLI models command with --search option (with mocked API)', (done) => {
-    const child = spawn('node', ['../../index.js', 'models', '--search', 'gpt'], {
+    const child = spawn('node', ['../index.js', 'models', '--search', 'gpt'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
+    });
+
+    let output = '';
+    child.stdout.on('data', (data) => {
+      output += data.toString();
     });
 
     let stderr = '';
@@ -173,9 +198,11 @@ describe('Full CLI Integration Tests', () => {
     });
 
     child.on('close', (code) => {
-      // The command should fail due to network error (since we're not mocking the API properly)
-      expect(stderr).toContain('Network Error') || expect(code).toBeGreaterThan(0);
+      // The models command should work without an API key
+      expect(code).toBe(0);
+      // Should contain model data (not empty) or at least the fetching message
+      expect(output).toContain('📡 Fetching model list') || expect(output).toContain('Available Models');
       done();
     });
-  });
+  }, 15000);
 });

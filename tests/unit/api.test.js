@@ -5,7 +5,9 @@ import ApiClient from '../../src/api/api.js';
 
 // Mock axios
 jest.mock('axios');
-const mockAxios = jest.requireMock('axios');
+
+// Get the mock object 
+const mockAxios = axios;
 
 describe('ApiClient', () => {
   let apiClient;
@@ -30,7 +32,7 @@ describe('ApiClient', () => {
       const mockBaseUrl = 'https://api.test.com';
       const mockResponse = { data: 'test stream' };
       
-      mockAxios.mockResolvedValue(mockResponse);
+      axios.mockResolvedValue(mockResponse);
 
       const result = await apiClient.makeChatCompletion(
         mockApiKey,
@@ -39,7 +41,7 @@ describe('ApiClient', () => {
         mockBaseUrl
       );
 
-      expect(mockAxios).toHaveBeenCalledWith({
+      expect(axios).toHaveBeenCalledWith({
         method: "post",
         url: `${mockBaseUrl}/chat/completions`,
         data: {
@@ -69,7 +71,7 @@ describe('ApiClient', () => {
           data: { error: { message: 'Unauthorized' } }
         }
       };
-      mockAxios.mockRejectedValue(errorResponse);
+      axios.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.makeChatCompletion(mockApiKey, mockModel, mockPrompt, mockBaseUrl)
@@ -85,7 +87,7 @@ describe('ApiClient', () => {
       const errorResponse = {
         request: {}
       };
-      mockAxios.mockRejectedValue(errorResponse);
+      axios.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.makeChatCompletion(mockApiKey, mockModel, mockPrompt, mockBaseUrl)
@@ -99,7 +101,7 @@ describe('ApiClient', () => {
       const mockBaseUrl = 'https://api.test.com';
       
       const errorResponse = new Error('Generic error');
-      mockAxios.mockRejectedValue(errorResponse);
+      axios.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.makeChatCompletion(mockApiKey, mockModel, mockPrompt, mockBaseUrl)
@@ -112,11 +114,11 @@ describe('ApiClient', () => {
       const mockBaseUrl = 'https://api.test.com';
       const mockResponse = { data: { data: ['model1', 'model2'] } };
       
-      mockAxios.get.mockResolvedValue(mockResponse);
+      axios.get.mockResolvedValue(mockResponse);
 
       const result = await apiClient.fetchModels(mockBaseUrl);
 
-      expect(mockAxios.get).toHaveBeenCalledWith(`${mockBaseUrl}/models`);
+      expect(axios.get).toHaveBeenCalledWith(`${mockBaseUrl}/models`);
       expect(result).toEqual(mockResponse);
     });
 
@@ -129,7 +131,7 @@ describe('ApiClient', () => {
           data: { error: { message: 'Internal Server Error' } }
         }
       };
-      mockAxios.get.mockRejectedValue(errorResponse);
+      axios.get.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.fetchModels(mockBaseUrl)
@@ -142,7 +144,7 @@ describe('ApiClient', () => {
       const errorResponse = {
         request: {}
       };
-      mockAxios.get.mockRejectedValue(errorResponse);
+      axios.get.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.fetchModels(mockBaseUrl)
@@ -158,7 +160,7 @@ describe('ApiClient', () => {
       const mockBaseUrl = 'https://api.test.com';
       const mockResponse = { data: { choices: [{ message: { content: 'response' } }] } };
       
-      mockAxios.post.mockResolvedValue(mockResponse);
+      axios.post.mockResolvedValue(mockResponse);
 
       const result = await apiClient.makeGeneralChat(
         mockApiKey,
@@ -167,7 +169,7 @@ describe('ApiClient', () => {
         mockBaseUrl
       );
 
-      expect(mockAxios.post).toHaveBeenCalledWith(
+      expect(axios.post).toHaveBeenCalledWith(
         `${mockBaseUrl}/chat/completions`,
         { model: mockModel, messages: [{ role: "user", content: mockPrompt }] },
         {
@@ -193,7 +195,7 @@ describe('ApiClient', () => {
           data: { error: { message: 'Rate limit exceeded' } }
         }
       };
-      mockAxios.post.mockRejectedValue(errorResponse);
+      axios.post.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.makeGeneralChat(mockApiKey, mockModel, mockPrompt, mockBaseUrl)
@@ -209,7 +211,7 @@ describe('ApiClient', () => {
       const errorResponse = {
         request: {}
       };
-      mockAxios.post.mockRejectedValue(errorResponse);
+      axios.post.mockRejectedValue(errorResponse);
 
       await expect(
         apiClient.makeGeneralChat(mockApiKey, mockModel, mockPrompt, mockBaseUrl)

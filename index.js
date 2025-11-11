@@ -13,7 +13,7 @@
  * - Configurable settings via config file
  */
 
-import 'dotenv/config';
+import './src/utils/envLoader.js';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import fs from 'fs';
@@ -210,11 +210,25 @@ program
 
     // Build the appropriate prompt based on mode and target
     let prompt = '';
-    if (['explain', 'fix', 'review', 'diff'].includes(modeLower) && target.length) {
-      // Read content from specified files if they exist
+    if (['explain', 'fix', 'review', 'diff'].includes(modeLower)) {
+      if (target.length === 0) {
+        // These modes require files to be specified
+        console.error(ERROR_MESSAGES.FILE_NOT_FOUND); // Using this message for missing files requirement
+        process.exit(1);
+      }
+      
+      // Validate that specified files actually exist
+      for (const f of target) {
+        if (!Utils.fileExists(f)) {
+          console.error(ERROR_MESSAGES.FILE_NOT_FOUND);
+          process.exit(1);
+        }
+      }
+      
+      // Read content from specified files
       const files = target.map((f) => ({
         name: f,
-        content: Utils.fileExists(f) ? Utils.readFileContent(f) : '',
+        content: Utils.readFileContent(f),
       }));
 
       // Construct prompt based on the mode
