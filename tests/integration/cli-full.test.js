@@ -27,7 +27,7 @@ describe('Full CLI Integration Tests', () => {
   });
 
   test('CLI shows full help message when run with --help', (done) => {
-    const child = spawn('node', ['../index.js', '--help'], {
+    const child = spawn('node', ['../bin/routerx.js', '--help'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });
@@ -48,7 +48,7 @@ describe('Full CLI Integration Tests', () => {
   }, 15000);
 
   test('CLI shows version when run with --version', (done) => {
-    const child = spawn('node', ['../index.js', '--version'], {
+    const child = spawn('node', ['../bin/routerx.js', '--version'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });
@@ -66,7 +66,7 @@ describe('Full CLI Integration Tests', () => {
   }, 15000);
 
   test('CLI models command works (with mocked API)', (done) => {
-    const child = spawn('node', ['../index.js', 'models'], {
+    const child = spawn('node', ['../bin/routerx.js', 'models'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });
@@ -91,7 +91,7 @@ describe('Full CLI Integration Tests', () => {
   }, 15000);
 
   test('CLI chat command with proper parameters fails due to network (expected)', (done) => {
-    const child = spawn('node', ['../index.js', 'chat', 'hello world'], {
+    const child = spawn('node', ['../bin/routerx.js', 'chat', 'hello world'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: {
         ...process.env,
@@ -113,7 +113,7 @@ describe('Full CLI Integration Tests', () => {
   }, 15000);
 
   test('CLI code command fails without proper target (as expected)', (done) => {
-    const child = spawn('node', ['../index.js', 'code', 'explain'], {
+    const child = spawn('node', ['../bin/routerx.js', 'code', 'explain'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });
@@ -135,7 +135,7 @@ describe('Full CLI Integration Tests', () => {
     const testFile = path.join(tempDir, 'test.js');
     fs.writeFileSync(testFile, 'console.log("hello");');
 
-    const child = spawn('node', ['../index.js', 'code', 'explain', testFile], {
+    const child = spawn('node', ['../bin/routerx.js', 'code', 'explain', testFile], {
       cwd: path.join(process.cwd(), 'tests'),
       env: {
         ...process.env,
@@ -157,7 +157,7 @@ describe('Full CLI Integration Tests', () => {
   }, 15000);
 
   test('CLI models command with --free option (with mocked API)', (done) => {
-    const child = spawn('node', ['../index.js', 'models', '--free'], {
+    const child = spawn('node', ['../bin/routerx.js', 'models', '--free'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });
@@ -182,7 +182,7 @@ describe('Full CLI Integration Tests', () => {
   }, 15000);
 
   test('CLI models command with --search option (with mocked API)', (done) => {
-    const child = spawn('node', ['../index.js', 'models', '--search', 'gpt'], {
+    const child = spawn('node', ['../bin/routerx.js', 'models', '--search', 'gpt'], {
       cwd: path.join(process.cwd(), 'tests'),
       env: process.env
     });

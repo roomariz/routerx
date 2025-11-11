@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "bin": {
-    "routerx": "./index.js"
+    "routerx": "./bin/routerx.js"
   },
   "scripts": {
     "test": "npx jest --no-cache",

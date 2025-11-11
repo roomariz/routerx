@@ -26,7 +26,7 @@ describe('CLI Integration Tests', () => {
   });
 
   test('CLI shows help message when run with --help', (done) => {
-    const child = spawn('node', ['index.js', '--help'], {
+    const child = spawn('node', ['bin/routerx.js', '--help'], {
       cwd: process.cwd(),
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -53,7 +53,7 @@ describe('CLI Integration Tests', () => {
     testEnv.OPENAI_API_KEY = '';
     testEnv.OPENROUTER_API_KEY = '';
 
-    const child = spawn('node', ['index.js', 'chat', 'test'], {
+    const child = spawn('node', ['bin/routerx.js', 'chat', 'test'], {
       cwd: process.cwd(),
       env: testEnv
     });
@@ -78,7 +78,7 @@ describe('CLI Integration Tests', () => {
       OPENAI_API_KEY: undefined
     };
 
-    const child = spawn('node', ['index.js', 'models'], {
+    const child = spawn('node', ['bin/routerx.js', 'models'], {
       cwd: process.cwd(),
       env: testEnv
     });
@@ -107,7 +107,7 @@ describe('CLI Integration Tests', () => {
     testEnv.OPENAI_API_KEY = '';
     testEnv.OPENROUTER_API_KEY = '';
 
-    const child = spawn('node', ['index.js', 'code', 'generate'], {
+    const child = spawn('node', ['bin/routerx.js', 'code', 'generate'], {
       cwd: process.cwd(),
       env: testEnv
     });
@@ -128,7 +128,7 @@ describe('CLI Integration Tests', () => {
     // Create a non-existent file path
     const nonExistentFile = `${tempDir}/non-existent-file.txt`;
     
-    const child = spawn('node', ['index.js', 'code', 'explain', nonExistentFile], {
+    const child = spawn('node', ['bin/routerx.js', 'code', 'explain', nonExistentFile], {
       cwd: process.cwd(),
       env: process.env
     });
@@ -155,7 +155,7 @@ describe('CLI Integration Tests', () => {
     // so we'll test with a non-existent file instead
     const nonExistentFile = `${tempDir}/non-existent-file.txt`;
     
-    const child = spawn('node', ['index.js', 'code', 'explain', nonExistentFile], {
+    const child = spawn('node', ['bin/routerx.js', 'code', 'explain', nonExistentFile], {
       cwd: process.cwd(),
       env: process.env
     });

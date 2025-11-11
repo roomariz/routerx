@@ -1,4 +1,4 @@
-// src/config/config.js
+// src/infrastructure/config/configManager.js
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -65,7 +65,7 @@ class ConfigManager {
         try {
           const configFile = fs.readFileSync(configPath, 'utf8');
           const parsedConfig = JSON.parse(configFile);
-          
+
           // Validate and merge configuration
           return this.mergeConfig(this.getDefaultConfig(), parsedConfig);
         } catch (error) {
@@ -88,16 +88,16 @@ class ConfigManager {
     if (!loadedConfig) {
       return { ...defaultConfig };
     }
-    
+
     const merged = { ...defaultConfig };
-    
+
     // Only merge properties that exist in the default config
     for (const [key, value] of Object.entries(loadedConfig)) {
       if (key in defaultConfig) {
         merged[key] = value;
       }
     }
-    
+
     return merged;
   }
 }
