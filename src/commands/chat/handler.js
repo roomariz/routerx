@@ -48,6 +48,6 @@ export async function handleChatCommand(prompt, options) {
     await handleStream(response, { save: options.save, prompt });
   } catch (err) {
     // Handle any errors from the API request using the error handler
-    handleError(err, 'REQUEST_ERROR');
+    handleError(err, 'REQUEST_ERROR', { operation: 'handleChatCommand', model, baseUrl, prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '') });
   }
 }

@@ -60,12 +60,11 @@ class ConfigManager {
             logger.error('Configuration loading failed', {
               ...logContext,
               configPath,
-              error: error.message ? error.message.replace(/[\r\n\u0000-\u001F\u007F-\u009F]/g, '').substring(0, 500) : 'Unknown error'
+              error: error.message
             });
 
             // Provide backward compatibility with tests expecting console.warn
-            const sanitizedErrorMessage = error.message ? error.message.replace(/[\r\n\u0000-\u001F\u007F-\u009F]/g, '').substring(0, 500) : 'Unknown error';
-            console.warn('⚠️ Warning: Could not parse config file', `'${configPath}': ${sanitizedErrorMessage}`);
+            console.warn('⚠️ Warning: Could not parse config file', `'${configPath}': ${error.message}`);
             
             // If config validation fails, return default config
             logger.info('Using default configuration due to validation errors', logContext);
@@ -97,12 +96,11 @@ class ConfigManager {
             logger.error('Configuration loading failed', {
               ...logContext,
               configPath,
-              error: error.message ? error.message.replace(/[\r\n\u0000-\u001F\u007F-\u009F]/g, '').substring(0, 500) : 'Unknown error'
+              error: error.message
             });
 
             // Provide backward compatibility with tests expecting console.warn
-            const sanitizedErrorMessage = error.message ? error.message.replace(/[\r\n\u0000-\u001F\u007F-\u009F]/g, '').substring(0, 500) : 'Unknown error';
-            console.warn('⚠️ Warning: Could not parse config file', `'${configPath}': ${sanitizedErrorMessage}`);
+            console.warn('⚠️ Warning: Could not parse config file', `'${configPath}': ${error.message}`);
             
             // If config validation fails, return default config
             logger.info('Using default configuration due to validation errors', logContext);
@@ -117,7 +115,7 @@ class ConfigManager {
     } catch (error) {
       logger.error('Configuration loading failed, using defaults', {
         ...logContext,
-        error: error.message ? error.message.replace(/[\r\n\u0000-\u001F\u007F-\u009F]/g, '').substring(0, 500) : 'Unknown error'
+        error: error.message
       });
       return this.getDefaultConfig();
     }

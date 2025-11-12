@@ -83,6 +83,6 @@ export async function handleModelsCommand(options) {
       console.log(`• ${model.id.padEnd(45)} | ${status}`);
     }
   } catch (err) {
-    handleError(err, 'MODEL_FETCH_ERROR');
+    handleError(err, 'MODEL_FETCH_ERROR', { operation: 'handleModelsCommand', options });
   }
 }

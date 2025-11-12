@@ -9,6 +9,17 @@ import ConfigManager from '../../src/infrastructure/config/index.js';
 jest.mock('fs');
 jest.mock('os');
 
+// Mock the logger to suppress console output during tests
+jest.mock('../../src/monitoring/logger.js', () => ({
+  logger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn()
+  },
+  Logger: jest.fn()
+}));
+
 describe('ConfigManager', () => {
   let configManager;
   let originalCwd;

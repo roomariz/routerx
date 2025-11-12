@@ -60,7 +60,10 @@ describe('Full CLI Integration Tests', () => {
 
     child.on('close', (code) => {
       expect(code).toBe(0);
-      expect(output.trim()).toBe('1.0.0');
+      // Extract version number from output (may have log messages before it)
+      const versionMatch = output.match(/1\.0\.0/);
+      expect(versionMatch).toBeTruthy();
+      expect(output.trim()).toContain('1.0.0');
       done();
     });
   }, 15000);

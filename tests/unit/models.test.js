@@ -221,7 +221,7 @@ describe('Models Command', () => {
 
       await modelsAction({});
 
-      expect(handleError).toHaveBeenCalledWith(mockError, 'MODEL_FETCH_ERROR');
+      expect(handleError).toHaveBeenCalledWith(mockError, 'MODEL_FETCH_ERROR', { operation: 'handleModelsCommand', options: {} });
     });
 
     test('does not require an API key to run', async () => {

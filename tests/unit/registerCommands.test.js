@@ -2,22 +2,22 @@
 import { describe, test, expect } from '@jest/globals';
 
 // Mock the command registration functions
-jest.mock('../../src/commands/chat.js', () => ({
+jest.mock('../../src/commands/chat/index.js', () => ({
   registerChatCommand: jest.fn()
 }));
 
-jest.mock('../../src/commands/models.js', () => ({
+jest.mock('../../src/commands/models/index.js', () => ({
   registerModelsCommand: jest.fn()
 }));
 
-jest.mock('../../src/commands/code.js', () => ({
+jest.mock('../../src/commands/code/index.js', () => ({
   registerCodeCommand: jest.fn()
 }));
 
 describe('RegisterCommands', () => {
-  const { registerChatCommand } = require('../../src/commands/chat.js');
-  const { registerModelsCommand } = require('../../src/commands/models.js');
-  const { registerCodeCommand } = require('../../src/commands/code.js');
+  const { registerChatCommand } = require('../../src/commands/chat/index.js');
+  const { registerModelsCommand } = require('../../src/commands/models/index.js');
+  const { registerCodeCommand } = require('../../src/commands/code/index.js');
   const { registerCommands } = require('../../src/cli/registerCommands.js');
 
   beforeEach(() => {

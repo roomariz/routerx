@@ -1,5 +1,6 @@
 // src/infrastructure/api/apiClient.js
 import axios from 'axios';
+import { handleAPIError } from '../../shared/utils/error.js';
 
 /**
  * API Client for RouterX
@@ -41,7 +42,8 @@ class ApiClient {
         },
       });
     } catch (error) {
-      throw this.handleError(error);
+      const context = { operation: 'makeChatCompletion', model, baseUrl };
+      throw handleAPIError(error, context);
     }
   }
 
@@ -55,7 +57,8 @@ class ApiClient {
       const response = await this.axiosInstance.get(`${baseUrl}/models`);
       return response;
     } catch (error) {
-      throw this.handleError(error);
+      const context = { operation: 'fetchModels', baseUrl };
+      throw handleAPIError(error, context);
     }
   }
 
@@ -81,27 +84,20 @@ class ApiClient {
       );
       return response;
     } catch (error) {
-      throw this.handleError(error);
+      const context = { operation: 'makeGeneralChat', model, baseUrl };
+      throw handleAPIError(error, context);
     }
   }
 
   /**
-   * Handle API errors consistently
+   * Public method to handle errors similar to the internal handleAPIError function
    * @param {Error} error - The error to handle
-   * @returns {Error} Formatted error
+   * @returns {Error} Formatted error object
    */
   handleError(error) {
-    if (error.response) {
-      // Server responded with error status
-      const { status, data } = error.response;
-      return new Error(`API Error: ${status} - ${data.error?.message || 'Unknown error'}`);
-    } else if (error.request) {
-      // Request was made but no response received
-      return new Error('Network Error: Request failed to reach the server');
-    } else {
-      // Something else happened
-      return new Error(`Request Error: ${error.message}`);
-    }
+    // We'll return the result of handleAPIError with a generic context
+    // For the test purposes, we don't include specific context
+    return handleAPIError(error, { operation: 'test' });
   }
 }
 

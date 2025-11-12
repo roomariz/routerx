@@ -215,6 +215,6 @@ export async function handleCodeCommand(mode, target, options) {
     }
 
     // If it wasn't a payment error, re-throw the original error
-    handleError(handledError, 'REQUEST_ERROR');
+    handleError(handledError, 'REQUEST_ERROR', { operation: 'handleCodeCommand', mode: modeLower, target, options });
   }
 }
