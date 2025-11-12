@@ -34,29 +34,25 @@ jest.mock('../../src/infrastructure/api/index.js', () => {
   };
 });
 
-jest.mock('../../src/infrastructure/config/index.js', () => {
-  class MockConfigManager {
-    constructor() {}
-    loadConfig() {
-      return {
-        defaultModel: 'test-model',
-        defaultBaseUrl: 'https://test-api.com',
-        defaultSavePath: './outputs',
-        resilience: {
-          timeoutMs: 30000,
-          maxRetries: 3,
-          baseDelayMs: 1000,
-          maxDelayMs: 8000,
-          jitterMs: 250,
-          breakerThreshold: 5,
-          breakerCooldownMs: 60000
-        }
-      };
+jest.mock('../../src/infrastructure/config/runtimeConfig.js', () => {
+  const mockConfig = {
+    defaultModel: 'test-model',
+    defaultBaseUrl: 'https://test-api.com',
+    defaultSavePath: './outputs',
+    resilience: {
+      timeoutMs: 30000,
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+      jitterMs: 250,
+      breakerThreshold: 5,
+      breakerCooldownMs: 60000
     }
-  }
+  };
+
   return {
-    default: MockConfigManager,
-    ConfigManager: MockConfigManager
+    getRuntimeConfig: jest.fn(() => mockConfig),
+    loadRuntimeConfig: jest.fn(() => mockConfig)
   };
 });
 

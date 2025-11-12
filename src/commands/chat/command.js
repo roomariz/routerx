@@ -1,15 +1,15 @@
-import { ConfigManager } from '../../infrastructure/config/index.js';
+import { getRuntimeConfig } from '../../infrastructure/config/runtimeConfig.js';
 import { handleChatCommand } from './handler.js';
-
-// Initialize configuration manager and load config
-const configManager = new ConfigManager();
-const config = configManager.loadConfig();
+import { RequestTracer } from '../../monitoring/tracer.js';
+import { logger } from '../../monitoring/logger.js';
 
 /**
  * Register the chat command with the Commander program
  * @param {import('commander').Command} program - The Commander program instance
  */
 export function registerChatCommand(program) {
+  const config = getRuntimeConfig();
+
   program
     .command('chat')
     .argument('<prompt>', 'Prompt to send to the model')
@@ -23,7 +23,20 @@ export function registerChatCommand(program) {
     .option('--retry-jitter <ms>', `Override retry jitter range in milliseconds (default: ${config.resilience.jitterMs})`)
     .option('--breaker-threshold <count>', `Override failures required to open the circuit breaker (default: ${config.resilience.breakerThreshold})`)
     .option('--breaker-cooldown <ms>', `Override circuit breaker cooldown in milliseconds (default: ${config.resilience.breakerCooldownMs})`)
-    .action((prompt, options) => handleChatCommand(prompt, options));
+    .action((prompt, options) =>
+      RequestTracer.withTrace(
+        'chatCommand',
+        async (traceId, traceLogger) => {
+          await handleChatCommand(prompt, options, {
+            logger: traceLogger,
+            traceId
+          });
+        },
+        {
+          logger: logger.child({ command: 'chat' })
+        }
+      )
+    );
 }
 
 export default registerChatCommand;

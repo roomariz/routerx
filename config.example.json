@@ -1,4 +1,26 @@
 {
+  "_notes": [
+    "RouterX validates this file at startup. Missing or invalid required fields will stop the CLI.",
+    "Keys prefixed with '_' are informational and can be removed from your own configuration."
+  ],
+  "_requiredFields": {
+    "defaultModel": "Required non-empty string (e.g. openai/gpt-4o-mini).",
+    "defaultBaseUrl": "Required valid URL (e.g. https://openrouter.ai/api/v1).",
+    "defaultSavePath": "Required writable directory path.",
+    "timeout": "Required positive number in milliseconds.",
+    "maxRetries": "Required non-negative integer.",
+    "resilience": {
+      "timeoutMs": "Required positive number in milliseconds.",
+      "maxRetries": "Required non-negative integer.",
+      "baseDelayMs": "Required positive number in milliseconds.",
+      "maxDelayMs": "Required positive number in milliseconds and must be >= baseDelayMs.",
+      "jitterMs": "Required non-negative number in milliseconds.",
+      "breakerThreshold": "Required positive integer.",
+      "breakerCooldownMs": "Required positive number in milliseconds.",
+      "breakerHalfOpenSuccesses": "Required positive integer.",
+      "breakerHalfOpenFailures": "Required positive integer."
+    }
+  },
   "defaultModel": "openai/gpt-4o-mini",
   "defaultBaseUrl": "https://openrouter.ai/api/v1",
   "defaultSavePath": "./outputs",

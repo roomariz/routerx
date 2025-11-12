@@ -1,17 +1,13 @@
 import chalk from 'chalk';
 import path from 'path';
 import { ApiClient } from '../../infrastructure/api/index.js';
-import { ConfigManager } from '../../infrastructure/config/index.js';
+import { getRuntimeConfig } from '../../infrastructure/config/runtimeConfig.js';
 import { fileExists, readFileContent, writeFileContent, ensureDirectory } from '../../shared/utils/file.js';
 import { ERROR_MESSAGES, LOG_MESSAGES, CODE_MODEL_KEYWORDS } from '../../shared/constants/index.js';
 import { validateApiKey } from '../../shared/utils/auth.js';
 import { handleError, handleAPIError, exitWithError } from '../../shared/utils/error.js';
 import { createResiliencePolicy, resolveResilienceOverridesFromOptions } from '../../resilience/index.js';
-import { logger } from '../../monitoring/logger.js';
-
-// Initialize configuration manager and load config
-const configManager = new ConfigManager();
-const config = configManager.loadConfig();
+import { logger as baseLogger } from '../../monitoring/logger.js';
 
 
 
@@ -26,7 +22,10 @@ const config = configManager.loadConfig();
  * @param {boolean} [options.free] - Whether to use free models only
  * @param {string} [options.prefer] - Preferred model keyword
  */
-export async function handleCodeCommand(mode, target, options) {
+export async function handleCodeCommand(mode, target, options, context = {}) {
+  const config = getRuntimeConfig();
+  const { logger: commandLogger = baseLogger, traceId } = context;
+
   // Validate API key exists
   const apiKey = validateApiKey();
   if (!apiKey) {
@@ -35,13 +34,15 @@ export async function handleCodeCommand(mode, target, options) {
 
   const resilienceOverrides = resolveResilienceOverridesFromOptions(options);
   if (Object.keys(resilienceOverrides).length > 0) {
-    logger.info('Applying resilience overrides for code command', {
-      overrides: resilienceOverrides
+    commandLogger.info('Applying resilience overrides for code command', {
+      overrides: resilienceOverrides,
+      traceId
     });
   }
 
   const resiliencePolicy = createResiliencePolicy(config, resilienceOverrides);
-  const apiClient = new ApiClient(config, { resiliencePolicy, logger });
+  const apiClientLogger = commandLogger.child({ component: 'ApiClient' });
+  const apiClient = new ApiClient(config, { resiliencePolicy, logger: apiClientLogger });
 
   const baseUrl = config.defaultBaseUrl; // Use base URL from config
 
@@ -94,6 +95,12 @@ export async function handleCodeCommand(mode, target, options) {
   // Log the action details
   console.log(chalk.cyan(LOG_MESSAGES.USING_MODEL), chalk.yellow(model));
   console.log(chalk.blue(LOG_MESSAGES.CODE_MODE), modeLower, '\n');
+  commandLogger.info('Executing code command', {
+    mode: modeLower,
+    model,
+    baseUrl,
+    traceId
+  });
 
   try {
     // Make the API request
@@ -102,6 +109,7 @@ export async function handleCodeCommand(mode, target, options) {
     // Extract and display the response
     const reply = res.data?.choices?.[0]?.message?.content || '(no reply)';
     console.log(chalk.green(LOG_MESSAGES.REPLY_HEADER) + reply);
+    commandLogger.info('Code command completed', { model, mode: modeLower, traceId });
 
     // Save to file if requested
     if (options.save) {
@@ -114,6 +122,7 @@ export async function handleCodeCommand(mode, target, options) {
       ensureDirectory(path.dirname(savePath));
       writeFileContent(savePath, reply);
       console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
+      commandLogger.debug('Code command output saved', { savePath, traceId });
     }
   } catch (err) {
     const handledError = handleAPIError(err);
@@ -121,6 +130,10 @@ export async function handleCodeCommand(mode, target, options) {
     // Handle payment required error (402) and try fallback models
     if (err.response?.status === 402 && !options.free) {
       console.log(chalk.yellow('💰 Model requires more credits. Searching for best free model...\n'));
+      commandLogger.warn('Primary code command model required payment, attempting fallback', {
+        model,
+        traceId
+      });
       let fallback = config.defaultModel; // Declare outside try block for access in catch
       try {
         // Initialize a new API client for fallback operations
@@ -156,6 +169,10 @@ export async function handleCodeCommand(mode, target, options) {
 
         const reply2 = res2.data?.choices?.[0]?.message?.content || '(no reply)';
         console.log(chalk.green('\n💬 Reply:\n') + reply2);
+        commandLogger.info('Code command fallback succeeded', {
+          fallbackModel: fallback,
+          traceId
+        });
         if (options.save) {
           // If save path doesn't include a directory, prepend the default save path
           let savePath = options.save;
@@ -166,6 +183,7 @@ export async function handleCodeCommand(mode, target, options) {
           ensureDirectory(path.dirname(savePath));
           writeFileContent(savePath, reply2);
           console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
+          commandLogger.debug('Code command fallback output saved', { savePath, traceId });
         }
         return; // Early return after successful fallback
       } catch (fallbackErr) {
@@ -174,6 +192,10 @@ export async function handleCodeCommand(mode, target, options) {
         // Handle rate limiting errors (429) with another fallback
         if (fallbackErr.response?.status === 429) {
           console.log(chalk.yellow('⚠️ Preferred free model is rate-limited. Trying next available free model...\n'));
+          commandLogger.warn('Fallback model rate limited, attempting alternate fallback', {
+            attemptedModel: fallback,
+            traceId
+          });
           try {
             // Initialize a new API client for alternate fallback operations
             // Fetch models again for second fallback attempt
@@ -194,6 +216,10 @@ export async function handleCodeCommand(mode, target, options) {
 
             const reply3 = res3.data?.choices?.[0]?.message?.content || '(no reply)';
             console.log(chalk.green('\n💬 Reply:\n') + reply3);
+            commandLogger.info('Code command alternate fallback succeeded', {
+              fallbackModel: nextFree,
+              traceId
+            });
             if (options.save) {
               // If save path doesn't include a directory, prepend the default save path
               let savePath = options.save;
@@ -204,14 +230,23 @@ export async function handleCodeCommand(mode, target, options) {
               ensureDirectory(path.dirname(savePath));
               writeFileContent(savePath, reply3);
               console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
+              commandLogger.debug('Code command alternate fallback output saved', { savePath, traceId });
             }
             return; // Early return after successful alternate fallback
           } catch (nextErr) {
             const handledNextError = handleAPIError(nextErr);
             console.error('❌ Alternate fallback also failed:', handledNextError.message);
+            commandLogger.error('Alternate fallback failed', {
+              error: nextErr,
+              traceId
+            });
           }
         } else {
           console.error('❌ Fallback model also failed:', handledFallbackError.message);
+          commandLogger.error('Fallback model failed', {
+            error: fallbackErr,
+            traceId
+          });
         }
         return;
       }
@@ -220,6 +255,17 @@ export async function handleCodeCommand(mode, target, options) {
     }
 
     // If it wasn't a payment error, re-throw the original error
-    handleError(handledError, 'REQUEST_ERROR', { operation: 'handleCodeCommand', mode: modeLower, target, options });
+    commandLogger.error('Code command failed', {
+      error: handledError,
+      mode: modeLower,
+      traceId
+    });
+    handleError(handledError, 'REQUEST_ERROR', {
+      operation: 'handleCodeCommand',
+      mode: modeLower,
+      target,
+      options,
+      traceId
+    });
   }
 }

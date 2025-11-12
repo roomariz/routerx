@@ -1,34 +1,66 @@
-// src/monitoring/tracer.js
-import { logger } from './logger.js';
+import { logger as baseLogger } from './logger.js';
 
 export class RequestTracer {
   static generateTraceId() {
-    return 'trace-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    return `trace-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }
 
-  static async withTrace(operationName, operation, traceId = null) {
-    const id = traceId || this.generateTraceId();
+  static normalizeOptions(options) {
+    if (typeof options === 'string') {
+      return { traceId: options };
+    }
+
+    if (options && typeof options === 'object') {
+      return options;
+    }
+
+    return {};
+  }
+
+  static formatDuration(durationMs) {
+    return `${Math.max(0, durationMs)}ms`;
+  }
+
+  static async withTrace(operationName, operation, options = {}) {
+    if (typeof operation !== 'function') {
+      throw new TypeError('RequestTracer.withTrace requires an async function operation');
+    }
+
+    const normalizedOptions = this.normalizeOptions(options);
+    const traceId = normalizedOptions.traceId || this.generateTraceId();
+    const targetLogger = normalizedOptions.logger || baseLogger;
+    const traceMeta = {
+      traceId,
+      operation: operationName
+    };
+
+    const operationLogger = typeof targetLogger.child === 'function'
+      ? targetLogger.child(traceMeta)
+      : targetLogger;
+
     const startTime = Date.now();
 
     try {
-      logger.info(`${operationName} started`, { traceId: id, operation: operationName });
-      const result = await operation(id);
+      targetLogger.info(`${operationName} started`, traceMeta);
+      const operationArgs = operation.length >= 2
+        ? [traceId, operationLogger]
+        : [traceId];
+      const result = await operation(...operationArgs);
       const duration = Date.now() - startTime;
-      logger.info(`${operationName} completed`, {
-        traceId: id,
-        operation: operationName,
-        duration: `${duration}ms`
+      targetLogger.info(`${operationName} completed`, {
+        ...traceMeta,
+        duration: this.formatDuration(duration)
       });
       return result;
     } catch (error) {
       const duration = Date.now() - startTime;
-      logger.error(`${operationName} failed`, {
-        traceId: id,
-        operation: operationName,
-        duration: `${duration}ms`,
-        error: error.message
+      targetLogger.error(`${operationName} failed`, {
+        ...traceMeta,
+        duration: this.formatDuration(duration),
+        error: error?.message || error
       });
       throw error;
     }
   }
 }
+// src/monitoring/tracer.js

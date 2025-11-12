@@ -1,14 +1,10 @@
 import { ApiClient } from '../../infrastructure/api/index.js';
-import { ConfigManager } from '../../infrastructure/config/index.js';
+import { getRuntimeConfig } from '../../infrastructure/config/runtimeConfig.js';
 import { ERROR_MESSAGES, LOG_MESSAGES } from '../../shared/constants/index.js';
 import { validateApiKey } from '../../shared/utils/auth.js';
 import { handleError } from '../../shared/utils/error.js';
 import { createResiliencePolicy, resolveResilienceOverridesFromOptions } from '../../resilience/index.js';
-import { logger } from '../../monitoring/logger.js';
-
-// Initialize configuration manager and load config
-const configManager = new ConfigManager();
-const config = configManager.loadConfig();
+import { logger as baseLogger } from '../../monitoring/logger.js';
 
 /**
  * Filter models based on command options
@@ -46,7 +42,10 @@ export function filterModels(models, options) {
  * @param {boolean} [options.free] - Whether to show only free models
  * @param {string} [options.search] - Keyword to search for in model names
  */
-export async function handleModelsCommand(options) {
+export async function handleModelsCommand(options, context = {}) {
+  const config = getRuntimeConfig();
+  const { logger: commandLogger = baseLogger, traceId } = context;
+
   // Validate API key exists (not strictly necessary for models but consistent)
   const apiKey = validateApiKey();
 
@@ -55,26 +54,38 @@ export async function handleModelsCommand(options) {
   try {
     const resilienceOverrides = resolveResilienceOverridesFromOptions(options);
     if (Object.keys(resilienceOverrides).length > 0) {
-      logger.info('Applying resilience overrides for models command', {
-        overrides: resilienceOverrides
+      commandLogger.info('Applying resilience overrides for models command', {
+        overrides: resilienceOverrides,
+        traceId
       });
     }
 
     const resiliencePolicy = createResiliencePolicy(config, resilienceOverrides);
 
     // Initialize API client with config for this request
-    const apiClient = new ApiClient(config, { resiliencePolicy, logger });
+    const apiClientLogger = commandLogger.child({ component: 'ApiClient' });
+    const apiClient = new ApiClient(config, { resiliencePolicy, logger: apiClientLogger });
+
+    commandLogger.info('Fetching models from API', { baseUrl, traceId });
     
     console.log(LOG_MESSAGES.FETCHING_MODELS);
     const res = await apiClient.fetchModels(baseUrl);
     const models = res.data.data || [];
+    commandLogger.debug('Models fetched', { totalModels: models.length, traceId });
 
     // Apply filters based on options using local utility
     const filtered = filterModels(models, options);
+    commandLogger.info('Models filtered', {
+      totalModels: models.length,
+      filteredModels: filtered.length,
+      filters: options,
+      traceId
+    });
 
     // Handle case where no models match the filters
     if (filtered.length === 0) {
       console.log(ERROR_MESSAGES.NO_MODELS_FOUND);
+      commandLogger.warn('No models matched filters', { filters: options, traceId });
       return;
     }
 
@@ -93,6 +104,11 @@ export async function handleModelsCommand(options) {
       console.log(`• ${model.id.padEnd(45)} | ${status}`);
     }
   } catch (err) {
-    handleError(err, 'MODEL_FETCH_ERROR', { operation: 'handleModelsCommand', options });
+    commandLogger.error('Models command failed', { error: err, traceId });
+    handleError(err, 'MODEL_FETCH_ERROR', {
+      operation: 'handleModelsCommand',
+      options,
+      traceId
+    });
   }
 }

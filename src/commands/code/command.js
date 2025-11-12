@@ -1,15 +1,15 @@
-import { ConfigManager } from '../../infrastructure/config/index.js';
+import { getRuntimeConfig } from '../../infrastructure/config/runtimeConfig.js';
 import { handleCodeCommand } from './handler.js';
-
-// Initialize configuration manager and load config
-const configManager = new ConfigManager();
-const config = configManager.loadConfig();
+import { RequestTracer } from '../../monitoring/tracer.js';
+import { logger } from '../../monitoring/logger.js';
 
 /**
  * Register the code command with the Commander program
  * @param {import('commander').Command} program - The Commander program instance
  */
 export function registerCodeCommand(program) {
+  const config = getRuntimeConfig();
+
   program
     .command('code')
     .description('AI code assistant (generate, explain, fix, review, diff)')
@@ -27,7 +27,20 @@ export function registerCodeCommand(program) {
     .option('--retry-jitter <ms>', `Override retry jitter range in milliseconds (default: ${config.resilience.jitterMs})`)
     .option('--breaker-threshold <count>', `Override failures required to open the circuit breaker (default: ${config.resilience.breakerThreshold})`)
     .option('--breaker-cooldown <ms>', `Override circuit breaker cooldown in milliseconds (default: ${config.resilience.breakerCooldownMs})`)
-    .action((mode, target, options) => handleCodeCommand(mode, target, options));
+    .action((mode, target, options) =>
+      RequestTracer.withTrace(
+        'codeCommand',
+        async (traceId, traceLogger) => {
+          await handleCodeCommand(mode, target, options, {
+            logger: traceLogger,
+            traceId
+          });
+        },
+        {
+          logger: logger.child({ command: 'code' })
+        }
+      )
+    );
 }
 
 export default registerCodeCommand;

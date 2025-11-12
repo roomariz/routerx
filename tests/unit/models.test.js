@@ -17,7 +17,7 @@ const MockApiClientConstructor = jest.fn(() => ({
   fetchModels: mockFetchModels
 }));
 
-jest.mock('../../src/infrastructure/config/index.js', () => {
+jest.mock('../../src/infrastructure/config/runtimeConfig.js', () => {
   const mockConfig = {
     defaultModel: 'test-model',
     defaultBaseUrl: 'https://test-api.com',
@@ -32,16 +32,10 @@ jest.mock('../../src/infrastructure/config/index.js', () => {
       breakerCooldownMs: 60000
     }
   };
-  
-  const MockConfigManager = jest.fn(() => ({
-    loadConfig: jest.fn(() => mockConfig),
-    getDefaultConfig: jest.fn(() => mockConfig),
-    mergeConfig: jest.fn((defaults, loaded) => ({ ...defaults, ...loaded }))
-  }));
 
   return {
-    default: MockConfigManager,
-    ConfigManager: MockConfigManager
+    getRuntimeConfig: jest.fn(() => mockConfig),
+    loadRuntimeConfig: jest.fn(() => mockConfig)
   };
 });
 

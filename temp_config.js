@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { ConfigValidator } from '../../monitoring/configValidator.js';
+import { ConfigValidator } from './src/config/index.js';
 import { logger } from '../../monitoring/logger.js';
 import { createRouterXError } from '../../shared/utils/error.js';
 

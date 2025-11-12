@@ -1,17 +1,13 @@
 import chalk from 'chalk';
 import { ApiClient } from '../../infrastructure/api/index.js';
-import { ConfigManager } from '../../infrastructure/config/index.js';
+import { getRuntimeConfig } from '../../infrastructure/config/runtimeConfig.js';
 import { ERROR_MESSAGES, LOG_MESSAGES } from '../../shared/constants/index.js';
 import { formatTimestamp } from '../../shared/utils/file.js';
 import { validateApiKey } from '../../shared/utils/auth.js';
 import { handleStream } from '../../shared/utils/stream.js';
 import { handleError } from '../../shared/utils/error.js';
 import { createResiliencePolicy, resolveResilienceOverridesFromOptions } from '../../resilience/index.js';
-import { logger } from '../../monitoring/logger.js';
-
-// Initialize configuration manager and load config
-const configManager = new ConfigManager();
-const config = configManager.loadConfig();
+import { logger as baseLogger } from '../../monitoring/logger.js';
 
 /**
  * Handle the chat command action
@@ -21,7 +17,10 @@ const config = configManager.loadConfig();
  * @param {string} [options.baseUrl] - API base URL to use
  * @param {string} [options.save] - File path to save the response
  */
-export async function handleChatCommand(prompt, options) {
+export async function handleChatCommand(prompt, options, context = {}) {
+  const config = getRuntimeConfig();
+  const { logger: commandLogger = baseLogger, traceId } = context;
+
   // Validate API key exists
   const apiKey = validateApiKey();
   if (!apiKey) {
@@ -31,13 +30,15 @@ export async function handleChatCommand(prompt, options) {
 
   const resilienceOverrides = resolveResilienceOverridesFromOptions(options);
   if (Object.keys(resilienceOverrides).length > 0) {
-    logger.info('Applying resilience overrides for chat command', {
-      overrides: resilienceOverrides
+    commandLogger.info('Applying resilience overrides for chat command', {
+      overrides: resilienceOverrides,
+      traceId
     });
   }
 
   const resiliencePolicy = createResiliencePolicy(config, resilienceOverrides);
-  const apiClient = new ApiClient(config, { resiliencePolicy, logger });
+  const apiClientLogger = commandLogger.child({ component: 'ApiClient' });
+  const apiClient = new ApiClient(config, { resiliencePolicy, logger: apiClientLogger });
 
   // Set default values for model and base URL from config
   const model = options.model || config.defaultModel;
@@ -55,8 +56,22 @@ export async function handleChatCommand(prompt, options) {
 
     // Handle the stream response using the dedicated utility
     await handleStream(response, { save: options.save, prompt });
+    commandLogger.info('Chat stream completed', { model, baseUrl, traceId });
   } catch (err) {
+    commandLogger.error('Chat command failed', {
+      error: err,
+      model,
+      baseUrl,
+      traceId
+    });
+
     // Handle any errors from the API request using the error handler
-    handleError(err, 'REQUEST_ERROR', { operation: 'handleChatCommand', model, baseUrl, prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '') });
+    handleError(err, 'REQUEST_ERROR', {
+      operation: 'handleChatCommand',
+      model,
+      baseUrl,
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+      traceId
+    });
   }
 }

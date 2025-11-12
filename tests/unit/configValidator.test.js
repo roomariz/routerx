@@ -1,7 +1,6 @@
 // tests/unit/configValidator.test.js
 import { describe, test, expect } from '@jest/globals';
-import { ConfigValidator } from '../../src/monitoring/configValidator.js';
-import { createRouterXError } from '../../src/shared/utils/error.js';
+import { ConfigValidator } from '../../src/config/validator.js';
 
 describe('ConfigValidator', () => {
   const baseResilience = {
@@ -25,6 +24,16 @@ describe('ConfigValidator', () => {
     resilience: baseResilience
   };
 
+  const expectConfigError = (invalidConfig) => {
+    expect(() => ConfigValidator.validate(invalidConfig)).toThrow();
+    try {
+      ConfigValidator.validate(invalidConfig);
+    } catch (error) {
+      expect(error).toBeDefined();
+      expect(error.code).toBe('CONFIG_VALIDATION_ERROR');
+    }
+  };
+
   test('validates valid configuration successfully', () => {
     const validConfig = { ...baseConfig };
 
@@ -33,18 +42,12 @@ describe('ConfigValidator', () => {
   });
 
   test('throws error for invalid defaultModel', () => {
-    const invalidConfig = {
+    const invalidConfig = { 
       ...baseConfig,
       defaultModel: '' // Empty string
     };
 
-    expect(() => ConfigValidator.validate(invalidConfig)).toThrow();
-    try {
-      ConfigValidator.validate(invalidConfig);
-    } catch (error) {
-      expect(error).toBeDefined();
-      expect(error.code).toBe('CONFIG_VALIDATION_ERROR');
-    }
+    expectConfigError(invalidConfig);
   });
 
   test('throws error for invalid defaultBaseUrl', () => {
@@ -53,13 +56,7 @@ describe('ConfigValidator', () => {
       defaultBaseUrl: 'not-a-url' // Invalid URL
     };
 
-    expect(() => ConfigValidator.validate(invalidConfig)).toThrow();
-    try {
-      ConfigValidator.validate(invalidConfig);
-    } catch (error) {
-      expect(error).toBeDefined();
-      expect(error.code).toBe('CONFIG_VALIDATION_ERROR');
-    }
+    expectConfigError(invalidConfig);
   });
 
   test('throws error for invalid timeout', () => {
@@ -68,13 +65,7 @@ describe('ConfigValidator', () => {
       timeout: -1 // Negative value
     };
 
-    expect(() => ConfigValidator.validate(invalidConfig)).toThrow();
-    try {
-      ConfigValidator.validate(invalidConfig);
-    } catch (error) {
-      expect(error).toBeDefined();
-      expect(error.code).toBe('CONFIG_VALIDATION_ERROR');
-    }
+    expectConfigError(invalidConfig);
   });
 
   test('throws error for invalid maxRetries', () => {
@@ -83,13 +74,76 @@ describe('ConfigValidator', () => {
       maxRetries: -1 // Negative value
     };
 
-    expect(() => ConfigValidator.validate(invalidConfig)).toThrow();
-    try {
-      ConfigValidator.validate(invalidConfig);
-    } catch (error) {
-      expect(error).toBeDefined();
-      expect(error.code).toBe('CONFIG_VALIDATION_ERROR');
-    }
+    expectConfigError(invalidConfig);
+  });
+
+  test('throws error for invalid defaultSavePath', () => {
+    const invalidConfig = {
+      ...baseConfig,
+      defaultSavePath: '' // Empty string
+    };
+
+    expectConfigError(invalidConfig);
+  });
+
+  test('throws error when resilience section is missing', () => {
+    const invalidConfig = {
+      ...baseConfig,
+      resilience: null
+    };
+
+    expectConfigError(invalidConfig);
+  });
+
+  test('throws error for invalid resilience timeoutMs', () => {
+    const invalidConfig = {
+      ...baseConfig,
+      resilience: {
+        ...baseResilience,
+        timeoutMs: 0
+      }
+    };
+
+    expectConfigError(invalidConfig);
+  });
+
+  test('throws error for invalid resilience jitterMs', () => {
+    const invalidConfig = {
+      ...baseConfig,
+      resilience: {
+        ...baseResilience,
+        jitterMs: -5
+      }
+    };
+
+    expectConfigError(invalidConfig);
+  });
+
+  test('throws error when maxDelayMs is less than baseDelayMs', () => {
+    const invalidConfig = {
+      ...baseConfig,
+      resilience: {
+        ...baseResilience,
+        baseDelayMs: 5000,
+        maxDelayMs: 1000
+      }
+    };
+
+    expectConfigError(invalidConfig);
+  });
+
+  test('throws error for invalid breaker settings', () => {
+    const invalidConfig = {
+      ...baseConfig,
+      resilience: {
+        ...baseResilience,
+        breakerThreshold: 0,
+        breakerHalfOpenSuccesses: 0,
+        breakerHalfOpenFailures: 0
+      }
+    };
+
+    expectConfigError(invalidConfig);
   });
 
   test('isValidUrl returns true for valid URLs', () => {

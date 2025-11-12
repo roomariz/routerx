@@ -1,15 +1,15 @@
-import { ConfigManager } from '../../infrastructure/config/index.js';
+import { getRuntimeConfig } from '../../infrastructure/config/runtimeConfig.js';
 import { handleModelsCommand } from './handler.js';
-
-// Initialize configuration manager and load config
-const configManager = new ConfigManager();
-const config = configManager.loadConfig();
+import { RequestTracer } from '../../monitoring/tracer.js';
+import { logger } from '../../monitoring/logger.js';
 
 /**
  * Register the models command with the Commander program
  * @param {import('commander').Command} program - The Commander program instance
  */
 export function registerModelsCommand(program) {
+  const config = getRuntimeConfig();
+
   program
     .command('models')
     .description('List available models (free, paid, or filtered by search keyword)')
@@ -22,7 +22,20 @@ export function registerModelsCommand(program) {
     .option('--retry-jitter <ms>', `Override retry jitter range in milliseconds (default: ${config.resilience.jitterMs})`)
     .option('--breaker-threshold <count>', `Override failures required to open the circuit breaker (default: ${config.resilience.breakerThreshold})`)
     .option('--breaker-cooldown <ms>', `Override circuit breaker cooldown in milliseconds (default: ${config.resilience.breakerCooldownMs})`)
-    .action((options) => handleModelsCommand(options));
+    .action((options) =>
+      RequestTracer.withTrace(
+        'modelsCommand',
+        async (traceId, traceLogger) => {
+          await handleModelsCommand(options, {
+            logger: traceLogger,
+            traceId
+          });
+        },
+        {
+          logger: logger.child({ command: 'models' })
+        }
+      )
+    );
 }
 
 export default registerModelsCommand;

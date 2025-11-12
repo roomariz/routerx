@@ -5,12 +5,20 @@ import '../infrastructure/env/envLoader.js';
 import { bootstrap } from '../core/bootstrap.js';
 import { createProgram } from './program.js';
 import { setupCLI } from '../core/index.js';
+import { loadRuntimeConfig } from '../infrastructure/config/runtimeConfig.js';
 
 // Bootstrap the application with global error handlers
 const bootstrapResult = bootstrap();
 if (!bootstrapResult.success) {
   console.error('Failed to bootstrap application:', bootstrapResult.message);
   process.exit(1);
+}
+
+// Validate configuration up front so operators see failures immediately
+try {
+  loadRuntimeConfig();
+} catch (error) {
+  handleStartupConfigurationError(error);
 }
 
 // Initialize the CLI program using Commander.js
@@ -21,3 +29,27 @@ setupCLI(program);
 
 // Parse and execute the command
 program.parse();
+
+function handleStartupConfigurationError(error) {
+  if (error?.code !== 'CONFIG_VALIDATION_ERROR') {
+    console.error('Failed to load configuration:', error?.message || 'Unknown error');
+    process.exit(1);
+  }
+
+  console.error('\nConfiguration validation failed. RouterX cannot start until the issues are fixed.');
+  if (error?.context?.configPath) {
+    console.error(`File: ${error.context.configPath}`);
+  }
+
+  const validationErrors = Array.isArray(error?.context?.errors) ? error.context.errors : [];
+  if (validationErrors.length > 0) {
+    validationErrors.forEach((message, index) => {
+      console.error(`  ${index + 1}. ${message}`);
+    });
+  } else if (error?.message) {
+    console.error(`  - ${error.message}`);
+  }
+
+  console.error('\nUpdate the configuration file (or remove it to fall back to defaults) and rerun the CLI.\n');
+  process.exit(1);
+}

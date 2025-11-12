@@ -341,6 +341,36 @@ cp node_modules/routerx/config.example.json ~/routerx-config.json
 
 Settings in the config file will override the default values but can be overridden by command-line options.
 
+### Validation & Required Fields
+
+RouterX validates your configuration as soon as the CLI starts. If any required field is missing or has an invalid value, the CLI prints each validation error and exits rather than silently falling back to the built-in defaults. This helps operators spot misconfigurations before sending any API traffic.
+
+Every configuration file must provide valid values for the following keys:
+
+- `defaultModel`: Non-empty string referencing the default model (for example `openai/gpt-4o-mini`).
+- `defaultBaseUrl`: Valid HTTPS URL for your API endpoint.
+- `defaultSavePath`: Writable path used when `--save` is passed without a directory.
+- `timeout`: Positive number (milliseconds) used for network timeouts.
+- `maxRetries`: Non-negative integer for application-level retries.
+- `resilience.timeoutMs`: Positive number for request timeouts applied by the resilience layer.
+- `resilience.maxRetries`: Non-negative integer for resilience retry attempts.
+- `resilience.baseDelayMs` / `resilience.maxDelayMs`: Positive numbers defining the exponential backoff range (`maxDelayMs` must be greater than or equal to `baseDelayMs`).
+- `resilience.jitterMs`: Non-negative number that randomizes delay between retries.
+- `resilience.breakerThreshold`: Positive integer that opens the circuit breaker after repeated failures.
+- `resilience.breakerCooldownMs`: Positive number that determines how long the breaker waits before transitioning to half-open.
+- `resilience.breakerHalfOpenSuccesses` / `resilience.breakerHalfOpenFailures`: Positive integers controlling how many attempts are required to close or reopen the breaker while half-open.
+
+The bundled [`config.example.json`](./config.example.json) documents these requirements in the `_requiredFields` helper block—those `_` keys are informational and may be removed once you understand the constraints. When a validation error occurs you'll see output similar to:
+
+```
+Configuration validation failed. RouterX cannot start until the issues are fixed.
+File: /Users/me/routerx-config.json
+  1. timeout must be a positive number
+  2. resilience.breakerThreshold must be a positive integer
+
+Update the configuration file (or remove it to fall back to defaults) and rerun the CLI.
+```
+
 ## Troubleshooting
 
 - **API Key Issues**: Ensure your API keys are properly set in the environment

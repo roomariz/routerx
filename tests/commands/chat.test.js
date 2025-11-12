@@ -34,14 +34,27 @@ jest.mock('../../src/infrastructure/api/index.js', () => ({
   }))
 }));
 
-jest.mock('../../src/infrastructure/config/index.js', () => ({
-  ConfigManager: jest.fn(() => ({
-    loadConfig: jest.fn(() => ({
-      defaultModel: 'test-model',
-      defaultBaseUrl: 'https://test.example.com'
-    }))
-  }))
-}));
+jest.mock('../../src/infrastructure/config/runtimeConfig.js', () => {
+  const mockConfig = {
+    defaultModel: 'test-model',
+    defaultBaseUrl: 'https://test.example.com',
+    defaultSavePath: './outputs',
+    resilience: {
+      timeoutMs: 30000,
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+      jitterMs: 250,
+      breakerThreshold: 5,
+      breakerCooldownMs: 60000
+    }
+  };
+
+  return {
+    getRuntimeConfig: jest.fn(() => mockConfig),
+    loadRuntimeConfig: jest.fn(() => mockConfig)
+  };
+});
 
 // Import after mocking
 import { handleChatCommand } from '../../src/commands/chat/handler.js';

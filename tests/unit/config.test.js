@@ -136,8 +136,29 @@ describe('ConfigManager', () => {
       // Should return default config when file reading fails
       expect(config).toEqual(configManager.getDefaultConfig());
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('⚠️ Warning: Could not parse config file'),
+        expect.stringContaining('Warning: Could not parse config file'),
         expect.stringContaining('Permission denied')
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    test('throws when configuration validation fails', () => {
+      os.homedir = jest.fn().mockReturnValue('/home/user');
+      fs.existsSync = jest.fn().mockImplementation((filePath) => filePath.includes('config.json'));
+      fs.readFileSync = jest.fn().mockReturnValue(JSON.stringify({
+        timeout: 0,
+        resilience: {
+          timeoutMs: -1
+        }
+      }));
+
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      expect(() => configManager.loadConfig()).toThrow(/failed validation/);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Validation error in config file'),
+        expect.stringContaining('timeout must be a positive number')
       );
 
       consoleSpy.mockRestore();
