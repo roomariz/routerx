@@ -7,33 +7,22 @@ RouterX is a lightweight CLI for interacting with OpenRouter models and AI servi
 The project is organized following clean architecture principles:
 
 ```
-src/
-├── cli/                    # CLI application entry points and command registration
-│   ├── bootstrap.js        # Main CLI initialization
-│   ├── registerCommands.js # Dynamic command loader
-│   └── program.js          # Commander.js instance setup
-├── commands/              # Individual command modules
-│   ├── chat/              # Chat command functionality
-│   │   ├── command.js     # Command registration
-│   │   ├── handler.js     # Business logic
-│   │   └── index.js       # Module exports
-│   ├── models/            # Models command functionality
-│   │   ├── command.js     # Command registration
-│   │   ├── handler.js     # Business logic
-│   │   └── index.js       # Module exports
-│   └── code/              # Code command functionality
-│       ├── command.js     # Command registration
-│       ├── handler.js     # Business logic
-│       └── index.js       # Module exports
-├── infrastructure/        # External service integration
-│   ├── api/               # API client and interactions
-│   ├── config/            # Configuration management
-│   └── env/               # Environment handling
-├── shared/                # Cross-cutting utilities and constants
-│   ├── constants/         # Application constants
-│   └── utils/             # Shared utility functions
-└── core/                  # Core application logic
-    └── index.js           # Main library exports
+├── bin/
+│   └── routerx.js          # CLI executable entry (boots src/cli/bootstrap)
+├── src/
+│   ├── cli/                # CLI bootstrap, command registration, Commander program
+│   ├── commands/           # Individual command modules (chat, models, code, health, metrics)
+│   ├── core/               # setupCLI exports for embedding
+│   ├── infrastructure/     # API client, config manager, env loader
+│   ├── monitoring/         # Logger, tracer, metrics, success metrics
+│   ├── resilience/         # Retry policy, circuit breaker, resilience helpers
+│   ├── shared/             # Cross-cutting constants and utilities
+│   └── utils/              # File helpers and other shared logic
+└── tests/
+    ├── unit/               # Module-level tests (commands, config, monitoring, resilience, ...)
+    ├── integration/        # CLI integration flows
+    ├── performance/        # Streaming performance coverage
+    └── testUtils.js        # Shared fixtures
 ```
 
 ## Key Features
@@ -49,6 +38,8 @@ src/
 - `routerx chat <prompt>` - Chat with AI models
 - `routerx models` - List available models
 - `routerx code [mode] [target...]` - AI code assistance
+- `routerx health` - Run runtime, API, and filesystem health checks (text or JSON)
+- `routerx metrics` - Export in-memory counters, histograms, and success metrics snapshots
 
 ## Development
 
@@ -66,16 +57,7 @@ node bin/routerx.js --help
 
 ## Testing
 
-Tests are organized to mirror the source structure:
-
-```
-tests/
-├── cli/
-├── commands/
-├── infrastructure/
-├── shared/
-└── integration/
-```
+Tests mirror the architecture: `tests/unit` exercises individual modules, `tests/integration` validates whole CLI flows, and `tests/performance` keeps streaming guarantees honest.
 
 ## License
 

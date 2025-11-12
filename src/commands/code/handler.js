@@ -1,3 +1,4 @@
+import fs from 'fs';
 import chalk from 'chalk';
 import path from 'path';
 import { ApiClient } from '../../infrastructure/api/index.js';
@@ -9,7 +10,242 @@ import { handleError, handleAPIError, exitWithError } from '../../shared/utils/e
 import { createResiliencePolicy, resolveResilienceOverridesFromOptions } from '../../resilience/index.js';
 import { logger as baseLogger } from '../../monitoring/logger.js';
 
+const FREE_MODEL_PATTERN = /(:free|-free|\/free)/i;
+const CONTEXT_MAX_ENTRIES = 40;
+const CONTEXT_MAX_DEPTH = 2;
+const CONTEXT_IGNORED_ENTRIES = new Set([
+  '.git',
+  '.next',
+  '.turbo',
+  'artifacts',
+  'coverage',
+  'dist',
+  'build',
+  'node_modules'
+]);
 
+function isModelFree(model = {}) {
+  if (!model?.id) {
+    return false;
+  }
+
+  if (FREE_MODEL_PATTERN.test(model.id)) {
+    return true;
+  }
+
+  const pricing = model.pricing || {};
+  return pricing.prompt === 0 || pricing.completion === 0;
+}
+
+function persistReply(saveOption, reply, config, commandLogger, traceId) {
+  if (!saveOption) {
+    return;
+  }
+
+  let savePath = saveOption;
+  if (!savePath.includes('/') && !savePath.includes('\\')) {
+    savePath = path.join(config.defaultSavePath, savePath);
+  }
+
+  ensureDirectory(path.dirname(savePath));
+  writeFileContent(savePath, reply);
+  console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
+  commandLogger.debug('Code command output saved', { savePath, traceId });
+}
+
+function resolveContextDirectory(optionValue) {
+  if (optionValue === undefined) {
+    return null;
+  }
+
+  const candidate = optionValue === true || optionValue === '' ? process.cwd() : optionValue;
+  const resolved = path.resolve(candidate);
+
+  try {
+    const stats = fs.statSync(resolved);
+    if (!stats.isDirectory()) {
+      exitWithError(`${ERROR_MESSAGES.INVALID_CONTEXT_DIRECTORY}: ${candidate}`);
+    }
+  } catch {
+    exitWithError(`${ERROR_MESSAGES.INVALID_CONTEXT_DIRECTORY}: ${candidate}`);
+  }
+
+  return resolved;
+}
+
+function collectContextEntries(rootDir, maxEntries = CONTEXT_MAX_ENTRIES, maxDepth = CONTEXT_MAX_DEPTH) {
+  const results = [];
+
+  function walk(currentDir, depth) {
+    if (depth > maxDepth || results.length >= maxEntries) {
+      return;
+    }
+
+    let dirEntries = [];
+    try {
+      dirEntries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    dirEntries
+      .filter((entry) => !CONTEXT_IGNORED_ENTRIES.has(entry.name))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((entry) => {
+        if (results.length >= maxEntries) {
+          return;
+        }
+
+        const absolute = path.join(currentDir, entry.name);
+        const relative = path.relative(rootDir, absolute) || entry.name;
+        results.push({
+          depth,
+          relativePath: relative,
+          isDirectory: entry.isDirectory()
+        });
+
+        if (entry.isDirectory()) {
+          walk(absolute, depth + 1);
+        }
+      });
+  }
+
+  walk(rootDir, 0);
+  return results;
+}
+
+function formatContextHeadingLabel(resolvedDir) {
+  const relative = path.relative(process.cwd(), resolvedDir);
+  return relative && relative !== '' ? relative : resolvedDir;
+}
+
+function buildContextSummary(resolvedDir) {
+  const entries = collectContextEntries(resolvedDir);
+  const label = formatContextHeadingLabel(resolvedDir);
+
+  if (entries.length === 0) {
+    return `Context Directory (${label}): (empty)`;
+  }
+
+  const lines = entries.map(({ depth, relativePath, isDirectory }) => {
+    const indent = '  '.repeat(depth);
+    const suffix = isDirectory ? '/' : '';
+    return `${indent}- ${relativePath}${suffix}`;
+  });
+
+  return `Context Directory (${label}):\n${lines.join('\n')}`;
+}
+
+async function getOrderedFreeModels(apiClient, baseUrl, preferKeyword) {
+  const response = await apiClient.fetchModels(baseUrl);
+  const models = Array.isArray(response?.data?.data) ? response.data.data : [];
+  const freeModels = models.filter(isModelFree).map((model) => model.id);
+
+  if (freeModels.length === 0) {
+    return [];
+  }
+
+  const normalizedPrefer = typeof preferKeyword === 'string' ? preferKeyword.toLowerCase() : null;
+  const seen = new Set();
+  const ordered = [];
+
+  if (normalizedPrefer) {
+    freeModels
+      .filter((id) => id.toLowerCase().includes(normalizedPrefer))
+      .forEach((id) => {
+        if (!seen.has(id)) {
+          ordered.push(id);
+          seen.add(id);
+        }
+      });
+  }
+
+  freeModels.forEach((id) => {
+    const lowered = id.toLowerCase();
+    if (
+      !seen.has(id) &&
+      CODE_MODEL_KEYWORDS.some((keyword) => lowered.includes(keyword.toLowerCase()))
+    ) {
+      ordered.push(id);
+      seen.add(id);
+    }
+  });
+
+  freeModels.forEach((id) => {
+    if (!seen.has(id)) {
+      ordered.push(id);
+      seen.add(id);
+    }
+  });
+
+  return ordered;
+}
+
+async function attemptFreeModelFlow({
+  apiClient,
+  baseUrl,
+  apiKey,
+  prompt,
+  config,
+  options,
+  commandLogger,
+  traceId,
+  excludeModels = new Set()
+}) {
+  let orderedModels;
+  try {
+    orderedModels = await getOrderedFreeModels(apiClient, baseUrl, options.prefer);
+  } catch (error) {
+    const handled = handleAPIError(error);
+    console.error('❌ Unable to fetch models for free-mode execution:', handled.message);
+    commandLogger.error('Failed to retrieve models for free-mode execution', {
+      error,
+      traceId
+    });
+    return false;
+  }
+
+  const availableModels = orderedModels.filter((id) => !excludeModels.has(id));
+  if (availableModels.length === 0) {
+    console.error(ERROR_MESSAGES.NO_FREE_MODELS_AVAILABLE);
+    return false;
+  }
+
+  for (const candidate of availableModels) {
+    excludeModels.add(candidate);
+    try {
+      const res = await apiClient.makeGeneralChat(apiKey, candidate, prompt, baseUrl);
+      const reply = res.data?.choices?.[0]?.message?.content || '(no reply)';
+      console.log(chalk.green('\n💬 Reply:\n') + reply);
+      commandLogger.info('Code command free-model execution succeeded', {
+        fallbackModel: candidate,
+        traceId
+      });
+      persistReply(options.save, reply, config, commandLogger, traceId);
+      return true;
+    } catch (error) {
+      const handled = handleAPIError(error);
+      if (error.response?.status === 429) {
+        console.log(chalk.yellow('⚠️ Free model is rate-limited. Trying another candidate...\n'));
+        commandLogger.warn('Free model rate limited', {
+          fallbackModel: candidate,
+          traceId
+        });
+        continue;
+      }
+
+      console.error(`❌ Free model ${candidate} failed:`, handled.message);
+      commandLogger.error('Free model attempt failed', {
+        fallbackModel: candidate,
+        error,
+        traceId
+      });
+    }
+  }
+
+  console.error('❌ Unable to complete request using available free models.');
+  return false;
+}
 
 /**
  * Handle the code command action
@@ -25,6 +261,7 @@ import { logger as baseLogger } from '../../monitoring/logger.js';
 export async function handleCodeCommand(mode, target, options, context = {}) {
   const config = getRuntimeConfig();
   const { logger: commandLogger = baseLogger, traceId } = context;
+  const commandTargets = Array.isArray(target) ? target : [];
 
   // Validate API key exists
   const apiKey = validateApiKey();
@@ -44,55 +281,78 @@ export async function handleCodeCommand(mode, target, options, context = {}) {
   const apiClientLogger = commandLogger.child({ component: 'ApiClient' });
   const apiClient = new ApiClient(config, { resiliencePolicy, logger: apiClientLogger });
 
-  const baseUrl = config.defaultBaseUrl; // Use base URL from config
-
-  // Normalize the mode to lowercase for consistent handling
+  const baseUrl = config.defaultBaseUrl;
   const modeLower = (mode || 'generate').toLowerCase();
 
   // Build the appropriate prompt based on mode and target
   let prompt = '';
   if (['explain', 'fix', 'review', 'diff'].includes(modeLower)) {
-    if (target.length === 0) {
-      // These modes require files to be specified
+    if (commandTargets.length === 0) {
       exitWithError(ERROR_MESSAGES.FILE_NOT_FOUND);
     }
 
-    // Validate that specified files actually exist
-    for (const f of target) {
+    for (const f of commandTargets) {
       if (!fileExists(f)) {
         exitWithError(ERROR_MESSAGES.FILE_NOT_FOUND);
       }
     }
 
-    // Read content from specified files
-    const files = target.map((f) => ({
+    const files = commandTargets.map((f) => ({
       name: f,
-      content: readFileContent(f),
+      content: readFileContent(f)
     }));
 
-    // Construct prompt based on the mode
     if (modeLower === 'diff' && files.length === 2) {
-      // Compare two files
       prompt = `Compare and summarise key differences:\n\n--- ${files[0].name} ---\n${files[0].content}\n\n--- ${files[1].name} ---\n${files[1].content}`;
     } else if (modeLower === 'fix') {
-      // Fix the provided code
-      prompt = `Fix and improve the following code. Return the corrected version only:\n\n${files.map(f => f.content).join('\n\n')}`;
+      prompt = `Fix and improve the following code. Return the corrected version only:\n\n${files.map((f) => f.content).join('\n\n')}`;
     } else if (modeLower === 'review') {
-      // Review the provided code
-      prompt = `Perform a detailed code review:\n\n${files.map(f => f.content).join('\n\n')}`;
+      prompt = `Perform a detailed code review:\n\n${files.map((f) => f.content).join('\n\n')}`;
     } else {
-      // Explain the provided code
-      prompt = `Explain what this code does:\n\n${files.map(f => f.content).join('\n\n')}`;
+      prompt = `Explain what this code does:\n\n${files.map((f) => f.content).join('\n\n')}`;
     }
   } else {
-    // If no target files provided, treat the target as the prompt
-    prompt = target.join(' ') || 'Write example code in Python';
+    prompt = commandTargets.join(' ') || 'Write example code in Python';
   }
 
-  // Use the specified model or default
-  const model = options.model || config.defaultModel;
+  const contextDirectory = resolveContextDirectory(options.context);
+  if (contextDirectory) {
+    const summary = buildContextSummary(contextDirectory);
+    prompt = `${summary}\n\n${prompt}`;
+  }
 
-  // Log the action details
+  const useFreeOnly = Boolean(options.free);
+  const attemptedModels = new Set();
+  let model = options.model || config.defaultModel;
+
+  if (useFreeOnly) {
+    commandLogger.info('Free-only mode enabled for code command', { traceId });
+  }
+
+  if (useFreeOnly && !options.model) {
+    try {
+      const freeCandidates = await getOrderedFreeModels(apiClient, baseUrl, options.prefer);
+      if (freeCandidates.length === 0) {
+        exitWithError(ERROR_MESSAGES.NO_FREE_MODELS_AVAILABLE);
+      }
+      model = freeCandidates[0];
+      console.log(chalk.cyan('🧠 Using free model:'), chalk.yellow(model));
+    } catch (error) {
+      const handled = handleAPIError(error);
+      commandLogger.error('Unable to resolve free model before execution', {
+        error,
+        traceId
+      });
+      handleError(handled, 'MODEL_FETCH_ERROR', {
+        operation: 'handleCodeCommand',
+        traceId
+      });
+      return;
+    }
+  }
+
+  attemptedModels.add(model);
+
   console.log(chalk.cyan(LOG_MESSAGES.USING_MODEL), chalk.yellow(model));
   console.log(chalk.blue(LOG_MESSAGES.CODE_MODE), modeLower, '\n');
   commandLogger.info('Executing code command', {
@@ -103,158 +363,39 @@ export async function handleCodeCommand(mode, target, options, context = {}) {
   });
 
   try {
-    // Make the API request
     const res = await apiClient.makeGeneralChat(apiKey, model, prompt, baseUrl);
-
-    // Extract and display the response
     const reply = res.data?.choices?.[0]?.message?.content || '(no reply)';
     console.log(chalk.green(LOG_MESSAGES.REPLY_HEADER) + reply);
     commandLogger.info('Code command completed', { model, mode: modeLower, traceId });
-
-    // Save to file if requested
-    if (options.save) {
-      // If save path doesn't include a directory, prepend the default save path
-      let savePath = options.save;
-      if (!savePath.includes('/') && !savePath.includes('\\')) {
-        savePath = path.join(config.defaultSavePath, savePath);
-      }
-
-      ensureDirectory(path.dirname(savePath));
-      writeFileContent(savePath, reply);
-      console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
-      commandLogger.debug('Code command output saved', { savePath, traceId });
-    }
+    persistReply(options.save, reply, config, commandLogger, traceId);
   } catch (err) {
     const handledError = handleAPIError(err);
+    const shouldFallbackToFree = useFreeOnly || err.response?.status === 402;
 
-    // Handle payment required error (402) and try fallback models
-    if (err.response?.status === 402 && !options.free) {
+    if (!useFreeOnly && err.response?.status === 402) {
       console.log(chalk.yellow('💰 Model requires more credits. Searching for best free model...\n'));
-      commandLogger.warn('Primary code command model required payment, attempting fallback', {
-        model,
-        traceId
-      });
-      let fallback = config.defaultModel; // Declare outside try block for access in catch
-      try {
-        // Initialize a new API client for fallback operations
-        // Fetch available models
-        const resList = await apiClient.fetchModels(baseUrl);
-        const freeModels = resList.data.data
-          .map((m) => m.id)
-          .filter((id) => /(:free|-free|\/free)/i.test(id));
-
-        fallback = config.defaultModel; // Use configured default
-
-        // If user specified a preferred model type, try to find a match
-        if (options.prefer) {
-          const prefer = options.prefer.toLowerCase();
-          const match = freeModels.find((id) => id.toLowerCase().includes(prefer));
-          if (match) {
-            fallback = match;
-            console.log(chalk.cyan(`🧠 Using preferred free model:`), chalk.yellow(fallback));
-          } else {
-            console.log(chalk.yellow(`⚠️ No free models matched preference '${options.prefer}', using default fallback.`));
-          }
-        } else {
-          // Otherwise, try to find coding-specific models
-          const codingPreference = freeModels.find((id) =>
-            CODE_MODEL_KEYWORDS.some(keyword => id.toLowerCase().includes(keyword.toLowerCase()))
-          );
-          if (codingPreference) fallback = codingPreference;
-          console.log(chalk.cyan(`🧠 Selected free model:`), chalk.yellow(fallback));
-        }
-
-        // Try with the fallback model
-        const res2 = await apiClient.makeGeneralChat(apiKey, fallback, prompt, baseUrl);
-
-        const reply2 = res2.data?.choices?.[0]?.message?.content || '(no reply)';
-        console.log(chalk.green('\n💬 Reply:\n') + reply2);
-        commandLogger.info('Code command fallback succeeded', {
-          fallbackModel: fallback,
-          traceId
-        });
-        if (options.save) {
-          // If save path doesn't include a directory, prepend the default save path
-          let savePath = options.save;
-          if (!savePath.includes('/') && !savePath.includes('\\')) {
-            savePath = path.join(config.defaultSavePath, savePath);
-          }
-
-          ensureDirectory(path.dirname(savePath));
-          writeFileContent(savePath, reply2);
-          console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
-          commandLogger.debug('Code command fallback output saved', { savePath, traceId });
-        }
-        return; // Early return after successful fallback
-      } catch (fallbackErr) {
-        const handledFallbackError = handleAPIError(fallbackErr);
-
-        // Handle rate limiting errors (429) with another fallback
-        if (fallbackErr.response?.status === 429) {
-          console.log(chalk.yellow('⚠️ Preferred free model is rate-limited. Trying next available free model...\n'));
-          commandLogger.warn('Fallback model rate limited, attempting alternate fallback', {
-            attemptedModel: fallback,
-            traceId
-          });
-          try {
-            // Initialize a new API client for alternate fallback operations
-            // Fetch models again for second fallback attempt
-            const resList2 = await apiClient.fetchModels(baseUrl);
-            const freeModels2 = resList2.data.data
-              .map((m) => m.id)
-              .filter((id) => /(:free|-free|\/free)/i.test(id));
-
-            // Find a different coding-capable model that wasn't tried before
-            const nextFree = freeModels2.find((id) =>
-              id !== fallback && CODE_MODEL_KEYWORDS.some(keyword => id.toLowerCase().includes(keyword.toLowerCase()))
-            ) || config.defaultModel; // Use configured default as fallback
-
-            console.log(chalk.cyan(`🧠 Retrying with alternate model:`), chalk.yellow(nextFree));
-
-            // Try with the second fallback model
-            const res3 = await apiClient.makeGeneralChat(apiKey, nextFree, prompt, baseUrl);
-
-            const reply3 = res3.data?.choices?.[0]?.message?.content || '(no reply)';
-            console.log(chalk.green('\n💬 Reply:\n') + reply3);
-            commandLogger.info('Code command alternate fallback succeeded', {
-              fallbackModel: nextFree,
-              traceId
-            });
-            if (options.save) {
-              // If save path doesn't include a directory, prepend the default save path
-              let savePath = options.save;
-              if (!savePath.includes('/') && !savePath.includes('\\')) {
-                savePath = path.join(config.defaultSavePath, savePath);
-              }
-
-              ensureDirectory(path.dirname(savePath));
-              writeFileContent(savePath, reply3);
-              console.log(chalk.dim(`\n${LOG_MESSAGES.SAVED_TO_FILE}${savePath}`));
-              commandLogger.debug('Code command alternate fallback output saved', { savePath, traceId });
-            }
-            return; // Early return after successful alternate fallback
-          } catch (nextErr) {
-            const handledNextError = handleAPIError(nextErr);
-            console.error('❌ Alternate fallback also failed:', handledNextError.message);
-            commandLogger.error('Alternate fallback failed', {
-              error: nextErr,
-              traceId
-            });
-          }
-        } else {
-          console.error('❌ Fallback model also failed:', handledFallbackError.message);
-          commandLogger.error('Fallback model failed', {
-            error: fallbackErr,
-            traceId
-          });
-        }
-        return;
-      }
-
-      return;
+    } else if (useFreeOnly) {
+      console.log(chalk.yellow('⚠️ Free model failed, trying alternate free models...\n'));
     }
 
-    // If it wasn't a payment error, re-throw the original error
+    if (shouldFallbackToFree) {
+      const success = await attemptFreeModelFlow({
+        apiClient,
+        baseUrl,
+        apiKey,
+        prompt,
+        config,
+        options,
+        commandLogger,
+        traceId,
+        excludeModels: attemptedModels
+      });
+
+      if (success) {
+        return;
+      }
+    }
+
     commandLogger.error('Code command failed', {
       error: handledError,
       mode: modeLower,
@@ -263,7 +404,7 @@ export async function handleCodeCommand(mode, target, options, context = {}) {
     handleError(handledError, 'REQUEST_ERROR', {
       operation: 'handleCodeCommand',
       mode: modeLower,
-      target,
+      target: commandTargets,
       options,
       traceId
     });

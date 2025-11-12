@@ -7,5 +7,7 @@ export const ERROR_MESSAGES = {
   REQUEST_ERROR: '❌ Error processing request',
   NETWORK_ERROR: '❌ Network Error: Request failed to reach the server',
   FILE_NOT_FOUND: '❌ File does not exist',
-  HEALTH_CHECK_FAILED: '❌ Health check failed'
+  HEALTH_CHECK_FAILED: '❌ Health check failed',
+  INVALID_CONTEXT_DIRECTORY: '❌ Context directory not found or inaccessible',
+  NO_FREE_MODELS_AVAILABLE: '❌ No free models are available from the API response'
 };

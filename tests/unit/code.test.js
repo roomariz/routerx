@@ -153,8 +153,14 @@ jest.mock('../../src/shared/utils/stream.js', () => ({
   handleStream: jest.fn(() => Promise.resolve())
 }));
 
+jest.mock('fs', () => ({
+  statSync: jest.fn(() => ({ isDirectory: () => true })),
+  readdirSync: jest.fn(() => [])
+}));
+
 // Import after mocking
 const { registerCodeCommand, handleCodeCommand } = require('../../src/commands/code/index.js');
+const fs = require('fs');
 
 describe('Code Command', () => {
   let mockProgram;
@@ -174,6 +180,11 @@ describe('Code Command', () => {
     console.log = jest.fn();
     console.error = jest.fn();
     process.exit = jest.fn();
+
+    fs.statSync.mockReset();
+    fs.statSync.mockReturnValue({ isDirectory: () => true });
+    fs.readdirSync.mockReset();
+    fs.readdirSync.mockReturnValue([]);
   });
 
   afterEach(() => {
@@ -388,34 +399,86 @@ describe('Code Command', () => {
           }
         });
 
-      mockFetchModels
-        .mockResolvedValueOnce({
-          data: {
-            data: [
-              { id: 'mistral-coder:free' },
-              { id: 'qwen-code-free' }
-            ]
-          }
-        })
-        .mockResolvedValueOnce({
-          data: {
-            data: [
-              { id: 'mistral-coder:free' },
-              { id: 'llama-code:free' }
-            ]
-          }
-        });
+      mockFetchModels.mockResolvedValueOnce({
+        data: {
+          data: [
+            { id: 'mistral-coder:free' },
+            { id: 'llama-code:free' }
+          ]
+        }
+      });
 
       await codeAction('generate', ['test prompt'], {});
 
       expect(mockMakeGeneralChat).toHaveBeenCalledTimes(3);
-      expect(mockFetchModels).toHaveBeenCalledTimes(2);
+      expect(mockFetchModels).toHaveBeenCalledTimes(1);
 
       const secondCall = mockMakeGeneralChat.mock.calls[1];
       const thirdCall = mockMakeGeneralChat.mock.calls[2];
 
       expect(secondCall[1]).toBe('mistral-coder:free');
       expect(thirdCall[1]).toBe('llama-code:free');
+    });
+
+    test('selects a free model automatically when --free flag is used', async () => {
+      const mockApiKey = 'test-api-key';
+      validateApiKey.mockReturnValue(mockApiKey);
+
+      mockFetchModels.mockResolvedValueOnce({
+        data: {
+          data: [
+            { id: 'paid/primary-model' },
+            { id: 'mistral-coder:free' },
+            { id: 'openchat/free-coder' }
+          ]
+        }
+      });
+
+      mockMakeGeneralChat.mockResolvedValueOnce({
+        data: {
+          choices: [{ message: { content: 'Free response' } }]
+        }
+      });
+
+      await codeAction('generate', ['prompt'], { free: true });
+
+      expect(mockFetchModels).toHaveBeenCalledTimes(1);
+      expect(mockMakeGeneralChat).toHaveBeenCalledTimes(1);
+      const call = mockMakeGeneralChat.mock.calls[0];
+      expect(call[1]).toBe('mistral-coder:free');
+    });
+
+    test('attaches directory context when --context is provided', async () => {
+      const mockApiKey = 'test-api-key';
+      validateApiKey.mockReturnValue(mockApiKey);
+
+      fs.readdirSync.mockImplementation((dir) => {
+        if (dir.includes(path.join('context', 'src'))) {
+          return [
+            { name: 'index.js', isDirectory: () => false }
+          ];
+        }
+        if (dir.includes('context')) {
+          return [
+            { name: 'src', isDirectory: () => true },
+            { name: 'README.md', isDirectory: () => false }
+          ];
+        }
+        return [];
+      });
+
+      mockMakeGeneralChat.mockResolvedValueOnce({
+        data: {
+          choices: [{ message: { content: 'Context aware response' } }]
+        }
+      });
+
+      await codeAction('generate', ['prompt text'], { context: 'context' });
+
+      const promptArg = mockMakeGeneralChat.mock.calls[0][2];
+      expect(promptArg).toContain('Context Directory');
+      expect(promptArg).toContain('src/');
+      expect(promptArg).toContain('README.md');
     });
   });
 });

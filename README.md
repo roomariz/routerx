@@ -69,9 +69,11 @@ Modes:
 Options:
 - `--model <model>`: Force specific model ID
 - `--save <path>`: Save output to file
-- `--context <dir>`: Add folder context
-- `--free`: Force only free model fallback
+- `--context [dir]`: Add folder context (omit the value to use the current directory)
+- `--free`: Use free models only (RouterX automatically picks the best free candidate)
 - `--prefer <keyword>`: Bias model selection
+
+When `--context` is provided, RouterX generates a concise tree of the specified directory (or the current working directory if you omit the value) and prepends it to the model prompt so the assistant can see nearby files. The `--free` switch instructs RouterX to pick a free model before sending the request and to iterate through additional free models automatically if the first choice is unavailable.
 
 ### Health Checks
 
@@ -468,68 +470,30 @@ RouterX follows a modular architecture based on clean architecture principles wi
 
 ```
 .
-├── index.js                 # Main CLI entry point
-├── jest.config.js           # Jest configuration
-├── test-runner.js           # Development test helper
+├── bin/
+│   └── routerx.js          # CLI executable entry point
+├── index.js                # Library exports for embedding
 ├── package.json
-├── README.md
-├── bin/                    # Executable files
-│   └── routerx.js          # CLI executable
 ├── src/                    # Source code
-│   ├── cli/                # CLI application entry points and registration
-│   │   ├── bootstrap.js    # Main CLI initialization
-│   │   ├── registerCommands.js # Dynamic command loader
-│   │   └── program.js      # Commander.js instance setup
-│   ├── commands/           # Individual command modules
+│   ├── cli/                # CLI bootstrap, command registration, Commander program
+│   ├── commands/           # Command modules
 │   │   ├── chat/           # Chat command functionality
-│   │   │   ├── command.js  # Command registration
-│   │   │   ├── handler.js  # Business logic
-│   │   │   └── index.js    # Module exports
-│   │   ├── models/         # Models command functionality
-│   │   │   ├── command.js  # Command registration
-│   │   │   ├── handler.js  # Business logic
-│   │   │   └── index.js    # Module exports
-│   │   └── code/           # Code command functionality
-│   │       ├── command.js  # Command registration
-│   │       ├── handler.js  # Business logic
-│   │       └── index.js    # Module exports
-│   ├── infrastructure/     # External service integration
-│   │   ├── api/            # API client and interactions
-│   │   │   ├── apiClient.js # HTTP client and API interactions
-│   │   │   └── index.js    # Export module interface
-│   │   ├── config/         # Configuration management
-│   │   │   ├── configManager.js # Configuration loading and management
-│   │   │   └── index.js    # Export module interface
-│   │   └── env/            # Environment handling
-│   │       ├── envLoader.js # Environment variable loading
-│   │       └── index.js    # Export module interface
-│   ├── shared/             # Cross-cutting utilities and constants
-│   │   ├── constants/      # Application constants
-│   │   │   ├── cli.js      # CLI-related constants
-│   │   │   ├── error.js    # Error message constants
-│   │   │   ├── log.js      # Logging message constants
-│   │   │   ├── default.js  # Default values and keywords
-│   │   │   └── index.js    # Export all constants
-│   │   └── utils/          # Shared utility functions
-│   │       ├── auth.js     # API key validation
-│   │       ├── error.js    # Error handling utilities
-│   │       ├── file.js     # File operations
-│   │       ├── stream.js   # Stream handling utilities
-│   │       └── index.js    # Export all utilities
-│   └── core/               # Core application logic
-│       └── index.js        # Main library exports
-└── tests/                  # Test files
-    ├── cli/                # CLI-specific tests
-    ├── commands/           # Command-specific tests
-    ├── infrastructure/     # Infrastructure tests
-    ├── shared/             # Shared utilities tests
-    ├── integration/        # Integration tests
-    │   └── cli.test.js
-    ├── unit/               # Unit tests
-    │   ├── api.test.js
-    │   ├── commander.test.js
-    │   └── config.test.js
-    └── testUtils.js        # Test utilities
+│   │   ├── code/           # Code assistant (generate/explain/fix/review/diff)
+│   │   ├── models/         # Model discovery
+│   │   ├── health/         # Runtime health checks
+│   │   └── metrics/        # Metrics snapshot exporter
+│   ├── core/               # Commander wiring exported via the public API
+│   ├── infrastructure/     # API client, config loader, env helpers
+│   ├── monitoring/         # Logger, metrics registry, success metrics, tracer
+│   ├── resilience/         # Retry/backoff helpers and circuit breaker policy
+│   ├── shared/             # Cross-cutting constants and utilities
+│   └── utils/              # Additional helpers consumed by commands
+├── tests/                  # Automated test suite
+│   ├── unit/               # Module-level coverage (commands, config, resilience, etc.)
+│   ├── integration/        # End-to-end CLI flows and API stubs
+│   ├── performance/        # Streaming performance harness
+│   └── testUtils.js        # Shared testing helpers
+└── documentation/          # Project docs (contributing, testing, upgrades, architecture)
 ```
 
 ### CLI Domain
@@ -538,7 +502,7 @@ RouterX follows a modular architecture based on clean architecture principles wi
 
 ### Commands Domain
 - Individual command modules with clear separation between registration and business logic
-- Each command (chat, models, code) is a separate module with dedicated functionality
+- Each command (chat, models, code, health, metrics) is a separate module with dedicated functionality
 
 ### Infrastructure Domain
 - API client and communication logic with external services
@@ -580,35 +544,10 @@ RouterX follows a modular architecture based on clean architecture principles wi
 
 RouterX has a comprehensive test suite to ensure functionality and catch regressions, organized with a modular structure that mirrors the source code:
 
-- **Unit Tests** (`tests/unit/`): Test individual functions and modules in isolation
-  - `api.test.js`: API client functionality and error handling
-  - `config.test.js`: Configuration loading and merging logic
-  - `utils.test.js`: File operations, path handling, and utility methods
-  - `commander.test.js`: CLI command structure and option parsing
-  - `constants.test.js`: Constants and configuration values validation
-
-- **Command Tests** (`tests/commands/`): Test individual command functionality
-  - `chat.test.js`: Chat command business logic
-  - `models.test.js`: Models command business logic
-  - `code.test.js`: Code command business logic
-
-- **Infrastructure Tests** (`tests/infrastructure/`): Test infrastructure components
-  - `apiClient.test.js`: API client functionality
-  - `configManager.test.js`: Configuration management
-  - `envLoader.test.js`: Environment loading utilities
-
-- **Shared Tests** (`tests/shared/`): Test shared utilities and constants
-  - `utils/file.test.js`: File operations testing
-  - `utils/auth.test.js`: Authentication utilities testing
-
-- **Integration Tests** (`tests/integration/`): Test how different modules work together
-  - `cli.test.js`: CLI integration and error handling
-  - `api-integration.test.js`: API integration with mocked responses
-  - `cli-full.test.js`: Full CLI functionality tests
-  - `cli-integration.test.js`: CLI command integration tests
-  - `command-integration.test.js`: Command integration tests
-
-- **Test Utilities** (`tests/testUtils.js`): Shared utilities for testing
+- **Unit Tests** (`tests/unit/`): Cover individual modules (API client, configuration manager, command handlers, resilience utilities, monitoring, etc.). Files such as `code.test.js`, `metricsCommand.test.js`, and `resilience.test.js` keep regression coverage close to the source layout.
+- **Integration Tests** (`tests/integration/`): Exercise full CLI flows with mocked network boundaries (`cli.test.js`, `cli-full.test.js`, `command-integration.test.js`, ...).
+- **Performance Tests** (`tests/performance/`): Validate streaming throughput, latency, and memory characteristics against guardrails.
+- **Test Utilities** (`tests/testUtils.js`): Shared helpers for composing fixtures and CLI invocations.
 
 The project uses Jest for testing with proper ESM module support configured in `jest.config.js`.
 

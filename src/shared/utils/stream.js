@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import chalk from 'chalk';
 import { ensureDirectory, formatTimestamp, normalizePath } from './file.js';
 import { LOG_MESSAGES } from '../constants/index.js';
@@ -16,9 +17,10 @@ export function handleStream(response, options = {}) {
 
   // Setup file output if requested
   if (save) {
-    const dir = normalizePath(save);
-    ensureDirectory(dir);
-    outputFile = fs.createWriteStream(save, { flags: 'a' });
+    const resolvedPath = normalizePath(save);
+    const directory = path.dirname(resolvedPath);
+    ensureDirectory(directory);
+    outputFile = fs.createWriteStream(resolvedPath, { flags: 'a' });
     outputFile.write(`\n[${new Date().toISOString()}] Prompt: ${prompt}\n\n`);
   }
 

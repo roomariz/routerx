@@ -53,12 +53,13 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our com
 
 4. Test your changes locally:
    ```bash
-   node index.js --help
+   node bin/routerx.js --help
    ```
 
 ## Project Structure
 
-- `index.js` - Main CLI implementation
+- `bin/routerx.js` - CLI executable entry point
+- `index.js` - Library exports (for embedding RouterX programmatically)
 - `package.json` - Project metadata and dependencies
 - `README.md` - User documentation
 - `CONTRIBUTING.md` - This file

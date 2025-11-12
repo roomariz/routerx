@@ -10,47 +10,23 @@ The RouterX test suite is designed to provide comprehensive coverage of all func
 
 ## Test Structure
 
-### Unit Tests
-Located in: `tests/unit/`
+### Unit Tests (`tests/unit/`)
+Cover individual modules in isolation, including:
 
-- `api.test.js` - Tests for the API client functionality
-- `config.test.js` - Tests for the configuration manager
-- `utils.test.js` - Tests for utility functions
-- `commander.test.js` - Tests for CLI command structure
-- `constants.test.js` - Tests for constants and configuration values
-- `auth.test.js` - Tests for authentication utilities
-- `errorHandler.test.js` - Tests for error handling utilities
-- `streamHandler.test.js` - Tests for stream handling utilities
-- `envLoader.test.js` - Tests for environment loading
+- `api.test.js` / `apiClient.test.js` – API client, retries, and error handling.
+- `config.test.js` / `configManager.test.js` – Configuration loading, overrides, and validation.
+- `code.test.js`, `chat.test.js`, `models.test.js` – Command handlers and CLI glue code.
+- `resilience.test.js`, `metrics.test.js`, `metricsCommand.test.js` – Resilience helpers, metrics registry, and snapshot exporter.
+- `envLoader.test.js`, `utils.test.js`, `streamHandler.test.js` – Shared utilities.
 
-### Command Tests
-Located in: `tests/commands/`
+### Integration Tests (`tests/integration/`)
+Exercise whole CLI flows with mocked transport and filesystem boundaries:
 
-- `chat.test.js` - Tests for chat command functionality
-- `models.test.js` - Tests for models command functionality
-- `code.test.js` - Tests for code command functionality
+- `cli.test.js`, `cli-full.test.js`, `cli-integration.test.js` – Commander wiring, option parsing, and happy paths.
+- `command-integration.test.js`, `api-integration.test.js` – Cross-command behaviour and API orchestration.
 
-### Infrastructure Tests
-Located in: `tests/infrastructure/`
-
-- `apiClient.test.js` - Tests for API client functionality
-- `configManager.test.js` - Tests for configuration management
-- `envLoader.test.js` - Tests for environment loading utilities
-
-### Shared Tests
-Located in: `tests/shared/`
-
-- `utils/file.test.js` - Tests for file operations
-- `utils/auth.test.js` - Tests for authentication utilities
-
-### Integration Tests
-Located in: `tests/integration/`
-
-- `cli.test.js` - Tests for CLI integration and error handling
-- `api-integration.test.js` - Tests for API integration with mocked responses
-- `cli-full.test.js` - Tests for full CLI functionality
-- `cli-integration.test.js` - Tests for CLI command integration
-- `command-integration.test.js` - Tests for command integration
+### Performance Tests (`tests/performance/`)
+- `streaming-performance.test.js` ensures streaming output keeps latency, throughput, and memory usage within expected guardrails.
 
 ## Running Tests
 
@@ -58,7 +34,7 @@ Located in: `tests/integration/`
 ```bash
 npm test
 ```
-This runs a basic check that verifies all test files exist and have the expected test definitions.
+This runs the default Jest suite (unit tests) with caching disabled, mirroring what CI executes.
 
 ### Full Test Suite
 ```bash
