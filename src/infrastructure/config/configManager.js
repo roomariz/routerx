@@ -17,7 +17,18 @@ class ConfigManager {
       defaultBaseUrl: "https://openrouter.ai/api/v1",
       defaultSavePath: "./outputs",
       maxRetries: 3,
-      timeout: 30000
+      timeout: 30000,
+      resilience: {
+        maxRetries: 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 8000,
+        jitterMs: 250,
+        timeoutMs: 30000,
+        breakerThreshold: 5,
+        breakerCooldownMs: 60000,
+        breakerHalfOpenSuccesses: 1,
+        breakerHalfOpenFailures: 1
+      }
     };
   }
 
@@ -136,12 +147,25 @@ class ConfigManager {
 
     const merged = { ...defaultConfig };
 
-    // Only merge properties that exist in the default config
     for (const [key, value] of Object.entries(loadedConfig)) {
-      if (key in defaultConfig) {
-        merged[key] = value;
+      if (!(key in defaultConfig)) {
+        continue;
       }
+
+      if (key === 'resilience' && value && typeof value === 'object') {
+        merged.resilience = {
+          ...defaultConfig.resilience,
+          ...value
+        };
+        continue;
+      }
+
+      merged[key] = value;
     }
+
+    merged.resilience = merged.resilience || { ...defaultConfig.resilience };
+    merged.resilience.timeoutMs = merged.resilience.timeoutMs ?? merged.timeout;
+    merged.resilience.maxRetries = merged.resilience.maxRetries ?? merged.maxRetries;
 
     return merged;
   }

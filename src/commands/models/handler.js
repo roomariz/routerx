@@ -1,9 +1,10 @@
-import chalk from 'chalk';
 import { ApiClient } from '../../infrastructure/api/index.js';
 import { ConfigManager } from '../../infrastructure/config/index.js';
-import { ERROR_MESSAGES, LOG_MESSAGES, FREE_MODEL_KEYWORDS } from '../../shared/constants/index.js';
+import { ERROR_MESSAGES, LOG_MESSAGES } from '../../shared/constants/index.js';
 import { validateApiKey } from '../../shared/utils/auth.js';
 import { handleError } from '../../shared/utils/error.js';
+import { createResiliencePolicy, resolveResilienceOverridesFromOptions } from '../../resilience/index.js';
+import { logger } from '../../monitoring/logger.js';
 
 // Initialize configuration manager and load config
 const configManager = new ConfigManager();
@@ -52,8 +53,17 @@ export async function handleModelsCommand(options) {
   const baseUrl = config.defaultBaseUrl; // Use base URL from config
 
   try {
+    const resilienceOverrides = resolveResilienceOverridesFromOptions(options);
+    if (Object.keys(resilienceOverrides).length > 0) {
+      logger.info('Applying resilience overrides for models command', {
+        overrides: resilienceOverrides
+      });
+    }
+
+    const resiliencePolicy = createResiliencePolicy(config, resilienceOverrides);
+
     // Initialize API client with config for this request
-    const apiClient = new ApiClient(config);
+    const apiClient = new ApiClient(config, { resiliencePolicy, logger });
     
     console.log(LOG_MESSAGES.FETCHING_MODELS);
     const res = await apiClient.fetchModels(baseUrl);

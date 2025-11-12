@@ -3,5 +3,16 @@
   "defaultBaseUrl": "https://openrouter.ai/api/v1",
   "defaultSavePath": "./outputs",
   "maxRetries": 3,
-  "timeout": 30000
+  "timeout": 30000,
+  "resilience": {
+    "maxRetries": 3,
+    "baseDelayMs": 1000,
+    "maxDelayMs": 8000,
+    "jitterMs": 250,
+    "timeoutMs": 30000,
+    "breakerThreshold": 5,
+    "breakerCooldownMs": 60000,
+    "breakerHalfOpenSuccesses": 1,
+    "breakerHalfOpenFailures": 1
+  }
 }

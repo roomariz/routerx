@@ -16,7 +16,16 @@ describe('ApiClient', () => {
     defaultModel: 'openai/gpt-4o-mini',
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
     defaultSavePath: './outputs',
-    maxRetries: 3
+    maxRetries: 3,
+    resilience: {
+      timeoutMs: 30000,
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+      jitterMs: 250,
+      breakerThreshold: 5,
+      breakerCooldownMs: 60000
+    }
   };
 
   beforeEach(() => {
@@ -41,7 +50,7 @@ describe('ApiClient', () => {
         mockBaseUrl
       );
 
-      expect(axios).toHaveBeenCalledWith({
+      expect(axios).toHaveBeenCalledWith(expect.objectContaining({
         method: "post",
         url: `${mockBaseUrl}/chat/completions`,
         data: {
@@ -54,7 +63,9 @@ describe('ApiClient', () => {
           Authorization: `Bearer ${mockApiKey}`,
           "Content-Type": "application/json",
         },
-      });
+        timeout: 30000,
+        signal: expect.any(Object)
+      }));
 
       expect(result).toEqual(mockResponse);
     });
@@ -118,7 +129,13 @@ describe('ApiClient', () => {
 
       const result = await apiClient.fetchModels(mockBaseUrl);
 
-      expect(axios.get).toHaveBeenCalledWith(`${mockBaseUrl}/models`);
+      expect(axios.get).toHaveBeenCalledWith(
+        `${mockBaseUrl}/models`,
+        expect.objectContaining({
+          timeout: 30000,
+          signal: expect.any(Object)
+        })
+      );
       expect(result).toEqual(mockResponse);
     });
 
@@ -172,12 +189,14 @@ describe('ApiClient', () => {
       expect(axios.post).toHaveBeenCalledWith(
         `${mockBaseUrl}/chat/completions`,
         { model: mockModel, messages: [{ role: "user", content: mockPrompt }] },
-        {
+        expect.objectContaining({
           headers: {
             Authorization: `Bearer ${mockApiKey}`,
             "Content-Type": "application/json",
           },
-        }
+          timeout: 30000,
+          signal: expect.any(Object)
+        })
       );
 
       expect(result).toEqual(mockResponse);

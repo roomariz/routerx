@@ -145,11 +145,24 @@ describe('ConfigManager', () => {
   });
 
   describe('mergeConfig', () => {
+    const baseResilience = {
+      timeoutMs: 30000,
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+      jitterMs: 250,
+      breakerThreshold: 5,
+      breakerCooldownMs: 60000,
+      breakerHalfOpenSuccesses: 1,
+      breakerHalfOpenFailures: 1
+    };
+
     test('merges default and loaded config correctly', () => {
       const defaultConfig = { 
         defaultModel: 'openai/gpt-4o-mini',
         timeout: 30000,
-        otherOption: 'default' 
+        otherOption: 'default',
+        resilience: { ...baseResilience }
       };
       const loadedConfig = { 
         defaultModel: 'custom/model',
@@ -169,7 +182,8 @@ describe('ConfigManager', () => {
     test('handles completely empty loaded config', () => {
       const defaultConfig = { 
         defaultModel: 'openai/gpt-4o-mini',
-        timeout: 30000 
+        timeout: 30000,
+        resilience: { ...baseResilience }
       };
       const loadedConfig = {};
 
@@ -181,7 +195,8 @@ describe('ConfigManager', () => {
     test('handles null loaded config', () => {
       const defaultConfig = { 
         defaultModel: 'openai/gpt-4o-mini',
-        timeout: 30000 
+        timeout: 30000,
+        resilience: { ...baseResilience }
       };
       const loadedConfig = null;
 

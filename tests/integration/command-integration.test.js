@@ -41,7 +41,16 @@ jest.mock('../../src/infrastructure/config/index.js', () => {
       return {
         defaultModel: 'test-model',
         defaultBaseUrl: 'https://test-api.com',
-        defaultSavePath: './outputs'
+        defaultSavePath: './outputs',
+        resilience: {
+          timeoutMs: 30000,
+          maxRetries: 3,
+          baseDelayMs: 1000,
+          maxDelayMs: 8000,
+          jitterMs: 250,
+          breakerThreshold: 5,
+          breakerCooldownMs: 60000
+        }
       };
     }
   }

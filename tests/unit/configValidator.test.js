@@ -4,14 +4,29 @@ import { ConfigValidator } from '../../src/monitoring/configValidator.js';
 import { createRouterXError } from '../../src/shared/utils/error.js';
 
 describe('ConfigValidator', () => {
+  const baseResilience = {
+    timeoutMs: 30000,
+    maxRetries: 3,
+    baseDelayMs: 1000,
+    maxDelayMs: 8000,
+    jitterMs: 250,
+    breakerThreshold: 5,
+    breakerCooldownMs: 60000,
+    breakerHalfOpenSuccesses: 1,
+    breakerHalfOpenFailures: 1
+  };
+
+  const baseConfig = {
+    defaultModel: 'openai/gpt-4o-mini',
+    defaultBaseUrl: 'https://api.example.com',
+    defaultSavePath: './outputs',
+    maxRetries: 3,
+    timeout: 30000,
+    resilience: baseResilience
+  };
+
   test('validates valid configuration successfully', () => {
-    const validConfig = {
-      defaultModel: 'openai/gpt-4o-mini',
-      defaultBaseUrl: 'https://api.example.com',
-      defaultSavePath: './outputs',
-      maxRetries: 3,
-      timeout: 30000
-    };
+    const validConfig = { ...baseConfig };
 
     expect(() => ConfigValidator.validate(validConfig)).not.toThrow();
     expect(ConfigValidator.validate(validConfig)).toBe(true);
@@ -19,11 +34,8 @@ describe('ConfigValidator', () => {
 
   test('throws error for invalid defaultModel', () => {
     const invalidConfig = {
-      defaultModel: '', // Empty string
-      defaultBaseUrl: 'https://api.example.com',
-      defaultSavePath: './outputs',
-      maxRetries: 3,
-      timeout: 30000
+      ...baseConfig,
+      defaultModel: '' // Empty string
     };
 
     expect(() => ConfigValidator.validate(invalidConfig)).toThrow();
@@ -37,11 +49,8 @@ describe('ConfigValidator', () => {
 
   test('throws error for invalid defaultBaseUrl', () => {
     const invalidConfig = {
-      defaultModel: 'openai/gpt-4o-mini',
-      defaultBaseUrl: 'not-a-url', // Invalid URL
-      defaultSavePath: './outputs',
-      maxRetries: 3,
-      timeout: 30000
+      ...baseConfig,
+      defaultBaseUrl: 'not-a-url' // Invalid URL
     };
 
     expect(() => ConfigValidator.validate(invalidConfig)).toThrow();
@@ -55,10 +64,7 @@ describe('ConfigValidator', () => {
 
   test('throws error for invalid timeout', () => {
     const invalidConfig = {
-      defaultModel: 'openai/gpt-4o-mini',
-      defaultBaseUrl: 'https://api.example.com',
-      defaultSavePath: './outputs',
-      maxRetries: 3,
+      ...baseConfig,
       timeout: -1 // Negative value
     };
 
@@ -73,11 +79,8 @@ describe('ConfigValidator', () => {
 
   test('throws error for invalid maxRetries', () => {
     const invalidConfig = {
-      defaultModel: 'openai/gpt-4o-mini',
-      defaultBaseUrl: 'https://api.example.com',
-      defaultSavePath: './outputs',
-      maxRetries: -1, // Negative value
-      timeout: 30000
+      ...baseConfig,
+      maxRetries: -1 // Negative value
     };
 
     expect(() => ConfigValidator.validate(invalidConfig)).toThrow();

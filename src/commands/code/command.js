@@ -20,6 +20,13 @@ export function registerCodeCommand(program) {
     .option('--context <dir>', 'Add folder context (default current dir)')
     .option('--free', 'Force only free model fallback')
     .option('--prefer <keyword>', 'Bias fallback model selection (e.g. coder, mistral, llama, qwen)')
+    .option('--timeout <ms>', `Override request timeout in milliseconds (default: ${config.resilience.timeoutMs})`)
+    .option('--max-retries <count>', `Override maximum retry attempts (default: ${config.resilience.maxRetries})`)
+    .option('--retry-base-delay <ms>', `Override initial retry backoff delay in milliseconds (default: ${config.resilience.baseDelayMs})`)
+    .option('--retry-max-delay <ms>', `Override maximum retry backoff delay in milliseconds (default: ${config.resilience.maxDelayMs})`)
+    .option('--retry-jitter <ms>', `Override retry jitter range in milliseconds (default: ${config.resilience.jitterMs})`)
+    .option('--breaker-threshold <count>', `Override failures required to open the circuit breaker (default: ${config.resilience.breakerThreshold})`)
+    .option('--breaker-cooldown <ms>', `Override circuit breaker cooldown in milliseconds (default: ${config.resilience.breakerCooldownMs})`)
     .action((mode, target, options) => handleCodeCommand(mode, target, options));
 }
 

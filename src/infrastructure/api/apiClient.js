@@ -1,20 +1,143 @@
 // src/infrastructure/api/apiClient.js
 import axios from 'axios';
-import { handleAPIError } from '../../shared/utils/error.js';
+import { retryWithBackoff } from '../../resilience/retry.js';
+import { CircuitBreaker } from '../../resilience/circuitBreaker.js';
+import { createResiliencePolicy } from '../../resilience/policy.js';
+import { logger as defaultLogger } from '../../monitoring/logger.js';
+import { handleAPIError, createRouterXError } from '../../shared/utils/error.js';
+import { RouterXError } from '../../shared/utils/routerxError.js';
 
 /**
  * API Client for RouterX
- * Handles all API interactions with the AI service
+ * Handles all API interactions with the AI service and applies resilience safeguards
  */
 class ApiClient {
-  constructor(config = {}) {
+  constructor(config = {}, options = {}) {
     this.config = config;
+    this.logger = options.logger || defaultLogger;
+    this.policy = options.resiliencePolicy || createResiliencePolicy(config, options.resilienceOverrides);
+
     this.axiosInstance = axios.create({
-      timeout: config.timeout || 30000,
+      timeout: this.policy.getTimeoutMs(),
       headers: {
         'Content-Type': 'application/json',
       },
     });
+
+    this.circuitBreaker = new CircuitBreaker({
+      ...this.policy.getBreakerOptions(),
+      logger: this.logger,
+      onStateChange: (change) => this.handleBreakerStateChange(change)
+    });
+  }
+
+  handleBreakerStateChange(change) {
+    const timestamp = Number.isFinite(change.timestamp)
+      ? new Date(change.timestamp).toISOString()
+      : new Date().toISOString();
+
+    this.logger?.info?.('Circuit breaker state changed', {
+      previousState: change.previousState,
+      currentState: change.currentState,
+      timestamp,
+      context: change.context
+    });
+  }
+
+  async executeWithResilience(operation, meta = {}) {
+    const {
+      operationName = 'apiOperation',
+      retryOverrides = {},
+      timeoutMs = this.policy.getTimeoutMs(),
+      breakerContext = {},
+      shouldRetry
+    } = meta;
+
+    const controller = new AbortController();
+    const { signal } = controller;
+    let timeoutId = null;
+
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    }
+
+    const baseRetryOptions = this.policy.getRetryOptions();
+    const configuredDeadline = retryOverrides.deadlineMs ?? baseRetryOptions.deadlineMs ?? timeoutMs;
+    const deadlineMs = Number.isFinite(configuredDeadline)
+      ? Math.min(configuredDeadline, timeoutMs)
+      : timeoutMs;
+
+    const finalRetryOptions = {
+      ...baseRetryOptions,
+      ...retryOverrides,
+      signal,
+      deadlineMs
+    };
+
+    if (typeof shouldRetry === 'function') {
+      finalRetryOptions.shouldRetry = shouldRetry;
+    }
+
+    const userOnRetry = finalRetryOptions.onRetry;
+    finalRetryOptions.onRetry = async (info) => {
+      this.logger?.warn?.('Retrying API operation', {
+        operation: operationName,
+        attempt: info.attempt,
+        delay: info.delay,
+        error: info.error?.message
+      });
+
+      if (typeof userOnRetry === 'function') {
+        await userOnRetry(info);
+      }
+    };
+
+    try {
+      const result = await this.circuitBreaker.execute(
+        () => retryWithBackoff(
+          (retryContext) => operation({
+            ...retryContext,
+            signal,
+            timeoutMs
+          }),
+          finalRetryOptions
+        ),
+        { ...breakerContext, operation: operationName }
+      );
+
+      this.logger?.debug?.('API operation succeeded', {
+        operation: operationName
+      });
+
+      return result;
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        const timeoutError = createRouterXError(
+          `Operation '${operationName}' timed out after ${timeoutMs}ms`,
+          'REQUEST_TIMEOUT',
+          { ...breakerContext, operation: operationName, timeoutMs },
+          'api'
+        );
+
+        this.logger?.error?.('API operation timed out', {
+          operation: operationName,
+          timeoutMs
+        });
+
+        throw timeoutError;
+      }
+
+      this.logger?.warn?.('API operation failed', {
+        operation: operationName,
+        error: error.message
+      });
+
+      throw error;
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
   }
 
   /**
@@ -23,26 +146,43 @@ class ApiClient {
    * @param {string} model - Model to use
    * @param {string} prompt - User prompt
    * @param {string} baseUrl - API base URL
+   * @param {Object} options - Additional execution options
    * @returns {Promise<Object>} API response stream
    */
-  async makeChatCompletion(apiKey, model, prompt, baseUrl) {
+  async makeChatCompletion(apiKey, model, prompt, baseUrl, options = {}) {
+    const context = { operation: 'makeChatCompletion', model, baseUrl };
+
     try {
-      return await this.axiosInstance({
-        method: "post",
-        url: `${baseUrl}/chat/completions`,
-        data: {
-          model,
-          stream: true,
-          messages: [{ role: "user", content: prompt }],
-        },
-        responseType: "stream",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-      });
+      return await this.executeWithResilience(
+        ({ signal, timeoutMs }) => this.axiosInstance({
+          method: 'post',
+          url: `${baseUrl}/chat/completions`,
+          data: {
+            model,
+            stream: true,
+            messages: [{ role: 'user', content: prompt }],
+          },
+          responseType: 'stream',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          signal,
+          timeout: timeoutMs
+        }),
+        {
+          operationName: 'makeChatCompletion',
+          breakerContext: context,
+          retryOverrides: options.retryOverrides,
+          timeoutMs: options.timeoutMs ?? this.policy.getTimeoutMs(),
+          shouldRetry: options.shouldRetry
+        }
+      );
     } catch (error) {
-      const context = { operation: 'makeChatCompletion', model, baseUrl };
+      if (error instanceof RouterXError) {
+        throw error;
+      }
+
       throw handleAPIError(error, context);
     }
   }
@@ -50,14 +190,31 @@ class ApiClient {
   /**
    * Fetch available models from API
    * @param {string} baseUrl - API base URL
+   * @param {Object} options - Additional execution options
    * @returns {Promise<Object>} API response with models
    */
-  async fetchModels(baseUrl) {
+  async fetchModels(baseUrl, options = {}) {
+    const context = { operation: 'fetchModels', baseUrl };
+
     try {
-      const response = await this.axiosInstance.get(`${baseUrl}/models`);
-      return response;
+      return await this.executeWithResilience(
+        ({ signal, timeoutMs }) => this.axiosInstance.get(`${baseUrl}/models`, {
+          signal,
+          timeout: timeoutMs
+        }),
+        {
+          operationName: 'fetchModels',
+          breakerContext: context,
+          retryOverrides: options.retryOverrides,
+          timeoutMs: options.timeoutMs ?? this.policy.getTimeoutMs(),
+          shouldRetry: options.shouldRetry
+        }
+      );
     } catch (error) {
-      const context = { operation: 'fetchModels', baseUrl };
+      if (error instanceof RouterXError) {
+        throw error;
+      }
+
       throw handleAPIError(error, context);
     }
   }
@@ -68,23 +225,39 @@ class ApiClient {
    * @param {string} model - Model to use
    * @param {string} prompt - User prompt
    * @param {string} baseUrl - API base URL
+   * @param {Object} options - Additional execution options
    * @returns {Promise<Object>} API response
    */
-  async makeGeneralChat(apiKey, model, prompt, baseUrl) {
+  async makeGeneralChat(apiKey, model, prompt, baseUrl, options = {}) {
+    const context = { operation: 'makeGeneralChat', model, baseUrl };
+
     try {
-      const response = await this.axiosInstance.post(
-        `${baseUrl}/chat/completions`,
-        { model, messages: [{ role: "user", content: prompt }] },
+      return await this.executeWithResilience(
+        ({ signal, timeoutMs }) => this.axiosInstance.post(
+          `${baseUrl}/chat/completions`,
+          { model, messages: [{ role: 'user', content: prompt }] },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            signal,
+            timeout: timeoutMs
+          }
+        ),
         {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
+          operationName: 'makeGeneralChat',
+          breakerContext: context,
+          retryOverrides: options.retryOverrides,
+          timeoutMs: options.timeoutMs ?? this.policy.getTimeoutMs(),
+          shouldRetry: options.shouldRetry
         }
       );
-      return response;
     } catch (error) {
-      const context = { operation: 'makeGeneralChat', model, baseUrl };
+      if (error instanceof RouterXError) {
+        throw error;
+      }
+
       throw handleAPIError(error, context);
     }
   }
@@ -95,8 +268,6 @@ class ApiClient {
    * @returns {Error} Formatted error object
    */
   handleError(error) {
-    // We'll return the result of handleAPIError with a generic context
-    // For the test purposes, we don't include specific context
     return handleAPIError(error, { operation: 'test' });
   }
 }

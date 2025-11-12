@@ -25,7 +25,16 @@ jest.mock('../../src/infrastructure/config/index.js', () => {
   const mockConfig = {
     defaultModel: 'test-model',
     defaultBaseUrl: 'https://test-api.com',
-    defaultSavePath: './outputs'
+    defaultSavePath: './outputs',
+    resilience: {
+      timeoutMs: 30000,
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+      jitterMs: 250,
+      breakerThreshold: 5,
+      breakerCooldownMs: 60000
+    }
   };
 
   const MockConfigManager = jest.fn(() => ({
@@ -336,24 +345,57 @@ describe('Code Command', () => {
       const mockApiKey = 'test-api-key';
       validateApiKey.mockReturnValue(mockApiKey);
 
-      // Enable separate instances mode and pre-configure the instances with expected behavior
-      useSeparateInstances = true;
-      instanceNumber = 0; // Reset instance counter to ensure proper sequence
-
-      const firstInstance = {
-        makeGeneralChat: jest.fn().mockRejectedValue({
+      mockMakeGeneralChat
+        .mockRejectedValueOnce({
           response: { status: 402, data: { error: { message: 'Payment required' } } }
-        }),
-        fetchModels: jest.fn()
-      };
-
-      const secondInstance = {
-        makeGeneralChat: jest.fn().mockResolvedValue({
+        })
+        .mockResolvedValueOnce({
           data: {
             choices: [{ message: { content: 'Fallback response' } }]
           }
-        }),
-        fetchModels: jest.fn().mockResolvedValue({
+        });
+
+      mockFetchModels.mockResolvedValueOnce({
+        data: {
+          data: [
+            { id: 'mistral-coder:free' },
+            { id: 'qwen-code-free' }
+          ]
+        }
+      });
+
+      await codeAction('generate', ['test prompt'], {});
+
+      expect(mockMakeGeneralChat).toHaveBeenCalledTimes(2);
+      expect(mockFetchModels).toHaveBeenCalledTimes(1);
+
+      const firstCall = mockMakeGeneralChat.mock.calls[0];
+      const secondCall = mockMakeGeneralChat.mock.calls[1];
+
+      expect(firstCall[0]).toBe(mockApiKey);
+      expect(firstCall[1]).toBe('test-model');
+      expect(secondCall[1]).toBe('mistral-coder:free');
+    });
+
+    test('handles rate limiting error (429) with alternate fallback', async () => {
+      const mockApiKey = 'test-api-key';
+      validateApiKey.mockReturnValue(mockApiKey);
+
+      mockMakeGeneralChat
+        .mockRejectedValueOnce({
+          response: { status: 402, data: { error: { message: 'Payment required' } } }
+        })
+        .mockRejectedValueOnce({
+          response: { status: 429, data: { error: { message: 'Rate limited' } } }
+        })
+        .mockResolvedValueOnce({
+          data: {
+            choices: [{ message: { content: 'Alternate fallback response' } }]
+          }
+        });
+
+      mockFetchModels
+        .mockResolvedValueOnce({
           data: {
             data: [
               { id: 'mistral-coder:free' },
@@ -361,70 +403,25 @@ describe('Code Command', () => {
             ]
           }
         })
-      };
-
-      preconfiguredInstances = [firstInstance, secondInstance];
-
-      await codeAction('generate', ['test prompt'], {});
-
-      // Check that fallback was attempted - first instance fails, second succeeds
-      expect(firstInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
-      expect(secondInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
-      expect(secondInstance.fetchModels).toHaveBeenCalled();
-    });
-
-    test('handles rate limiting error (429) with alternate fallback', async () => {
-      const mockApiKey = 'test-api-key';
-      validateApiKey.mockReturnValue(mockApiKey);
-
-      // Enable separate instances mode and pre-configure the instances with expected behavior
-      useSeparateInstances = true;
-      instanceNumber = 0; // Reset instance counter to ensure proper sequence
-
-      const firstInstance = {
-        makeGeneralChat: jest.fn().mockRejectedValue({
-          response: { status: 402, data: { error: { message: 'Payment required' } } }
-        }),
-        fetchModels: jest.fn() // Won't be called on first instance
-      };
-
-      const secondInstance = {
-        makeGeneralChat: jest.fn().mockRejectedValue({
-          response: { status: 429, data: { error: { message: 'Rate limited' } } }
-        }),
-        fetchModels: jest.fn().mockResolvedValue({
-          data: {
-            data: [{ id: 'mistral-coder:free' }]
-          }
-        })
-      };
-
-      const thirdInstance = {
-        makeGeneralChat: jest.fn().mockResolvedValue({
-          data: {
-            choices: [{ message: { content: 'Alternate fallback response' } }]
-          }
-        }),
-        fetchModels: jest.fn().mockResolvedValue({
+        .mockResolvedValueOnce({
           data: {
             data: [
-              { id: 'mistral-coder:free' }, // This should be skipped (same as first fallback)
-              { id: 'llama-code:free' } // This should be selected (different and matches keywords)
+              { id: 'mistral-coder:free' },
+              { id: 'llama-code:free' }
             ]
           }
-        })
-      };
-
-      preconfiguredInstances = [firstInstance, secondInstance, thirdInstance];
+        });
 
       await codeAction('generate', ['test prompt'], {});
 
-      // Check that all 3 instances were created and used (first fails, second fails with 429, third succeeds)
-      expect(firstInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
-      expect(secondInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
-      expect(secondInstance.fetchModels).toHaveBeenCalled(); // First fallback fetches models
-      expect(thirdInstance.fetchModels).toHaveBeenCalled(); // Second fallback fetches models
-      expect(thirdInstance.makeGeneralChat).toHaveBeenCalledTimes(1);
+      expect(mockMakeGeneralChat).toHaveBeenCalledTimes(3);
+      expect(mockFetchModels).toHaveBeenCalledTimes(2);
+
+      const secondCall = mockMakeGeneralChat.mock.calls[1];
+      const thirdCall = mockMakeGeneralChat.mock.calls[2];
+
+      expect(secondCall[1]).toBe('mistral-coder:free');
+      expect(thirdCall[1]).toBe('llama-code:free');
     });
   });
 });

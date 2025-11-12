@@ -64,91 +64,148 @@ process.on('uncaughtException', (err) => {
 
 ## 2. Resilience and Fault Tolerance
 
+### Objectives and Scope
+- Harden RouterX against transient and prolonged dependency failures without impacting CLI usability
+- Provide operators with tunable safeguards (retries, timeouts, breakers) that align with API SLAs
+- Guarantee deterministic cleanup of resources so repeated executions remain idempotent
+- Produce actionable telemetry when resilience features intervene, enabling continuous tuning
+
+### Resilience Control Plane
+- **Resilience policy layer**: Introduce `src/resilience/policy.js` to centralize defaults (`maxRetries`, `backoff`, `breakerThreshold`, `breakerCooldown`, `timeout`). Support overrides via CLI flags (`--retry`, `--timeout`) and environment variables (`ROUTERX_MAX_RETRIES`, etc.).
+- **Execution context tagging**: Augment command execution context with `operationId`, `traceId`, retry metadata, and breaker state to feed structured logs and metrics.
+- **Decision logging**: Every automated recovery action (retry attempt, breaker open/close) logs a structured entry with cause, duration, and next scheduled action to `logger.info`.
+
 ### Retry and Timeout Mechanisms
 - **Current**: Basic timeout configuration in API client
-- **Recommendation**: Implement sophisticated retry logic with exponential backoff
+- **Recommendation**: Implement sophisticated retry logic with exponential backoff, jitter, and cancellation awareness. Retries should respect an overall deadline to avoid excessive waits.
 
 ```javascript
-// Enhanced API client with retry logic
-async retryWithBackoff(operation, maxRetries = 3, baseDelay = 1000) {
+// src/resilience/retry.js
+async function retryWithBackoff(operation, options = {}) {
+  const {
+    maxRetries = 3,
+    baseDelay = 1000,
+    maxDelay = 8000,
+    signal,
+    onRetry = () => {}
+  } = options;
+
+  let attempt = 0;
   let lastError;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+
+  while (attempt <= maxRetries) {
+    if (signal?.aborted) {
+      throw new Error('Retry aborted by caller');
+    }
+
     try {
       return await operation();
     } catch (error) {
       lastError = error;
-      
-      if (attempt === maxRetries) {
+
+      if (attempt === maxRetries || !shouldRetry(error)) {
         break;
       }
-      
-      // Only retry on network errors or server errors (5xx)
-      if (!this.shouldRetry(error)) {
-        throw error;
-      }
-      
-      const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
-      await new Promise(resolve => setTimeout(resolve, delay));
+
+      const delay = Math.min(maxDelay, baseDelay * Math.pow(2, attempt));
+      const jitter = Math.random() * 100;
+
+      await onRetry({ attempt, delay: delay + jitter, error });
+      await new Promise((resolve) => setTimeout(resolve, delay + jitter));
     }
+
+    attempt += 1;
   }
-  
+
   throw lastError;
 }
 
-shouldRetry(error) {
-  return error.response?.status >= 500 || 
-         error.code === 'ECONNABORTED' || 
-         error.code === 'ENOTFOUND';
+function shouldRetry(error) {
+  return error.response?.status >= 500 ||
+         error.code === 'ECONNABORTED' ||
+         error.code === 'ENOTFOUND' ||
+         error.message?.includes('timeout');
 }
 ```
 
 ### Circuit Breaker Pattern
-- **Recommendation**: Implement circuit breaker for API failures
+- **Current**: No automated fail-fast logic guarding external dependencies
+- **Recommendation**: Implement circuit breaker for API failures, including half-open probes, rolling failure window, and integration hooks for metrics dashboards.
 
 ```javascript
+// src/resilience/circuitBreaker.js
 class CircuitBreaker {
-  constructor(threshold = 5, timeout = 60000) {
+  constructor({ threshold = 5, cooldownMs = 60000, halfOpenSample = 1, clock = Date }) {
     this.threshold = threshold;
-    this.timeout = timeout;
-    this.failureCount = 0;
-    this.state = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
-    this.lastFailureTime = null;
+    this.cooldownMs = cooldownMs;
+    this.halfOpenSample = halfOpenSample;
+    this.clock = clock;
+    this.reset();
   }
 
-  async call(fn) {
+  async execute(action, context = {}) {
     if (this.state === 'OPEN') {
-      if (Date.now() - this.lastFailureTime > this.timeout) {
+      if (this.clock.now() - this.lastFailureTime >= this.cooldownMs) {
         this.state = 'HALF_OPEN';
+        this.successes = 0;
+        this.failures = 0;
       } else {
-        throw new Error('Circuit breaker is OPEN');
+        throw this.buildBreakerError('open', context);
       }
     }
 
     try {
-      const result = await fn();
-      this.onSuccess();
+      const result = await action();
+      this.recordSuccess();
       return result;
     } catch (error) {
-      this.onFailure();
+      this.recordFailure(error, context);
       throw error;
     }
   }
 
-  onSuccess() {
-    this.failureCount = 0;
-    this.state = 'CLOSED';
+  recordSuccess() {
+    this.successes += 1;
+    if (this.state === 'HALF_OPEN' && this.successes >= this.halfOpenSample) {
+      this.reset();
+    }
   }
 
-  onFailure() {
-    this.failureCount++;
-    if (this.failureCount >= this.threshold) {
+  recordFailure(error, context) {
+    this.failures += 1;
+    this.lastFailureTime = this.clock.now();
+
+    if (this.failures >= this.threshold) {
       this.state = 'OPEN';
-      this.lastFailureTime = Date.now();
+      context.logger?.warn('Circuit breaker opened', { error: error.message, ...context });
     }
+  }
+
+  reset() {
+    this.state = 'CLOSED';
+    this.failures = 0;
+    this.successes = 0;
+    this.lastFailureTime = 0;
+  }
+
+  buildBreakerError(state, context) {
+    const error = new Error(`Circuit breaker is ${state.toUpperCase()}`);
+    context.logger?.warn('Breaker prevented call', { state, ...context });
+    return error;
   }
 }
 ```
+
+### Coordinated Use (Retry + Breaker + Timeout)
+- Wrap outbound API calls with `Promise.race` between the operation and an abortable timeout to cap run time.
+- Execute the timed operation through the circuit breaker. If closed/half-open, run with `retryWithBackoff`; if open, fail fast with actionable message to the user.
+- Share an `AbortController` between timeout and retry logic so user cancellations or CLI shutdown interrupts pending retries gracefully.
+- Surface breaker state (`OPEN`, `HALF_OPEN`) in CLI output with guidance (e.g., "Service temporarily unavailable, retry in 60s") to avoid silent failures.
+
+### Fallback and Degradation Strategies
+- Cache last successful response for read-only operations; serve stale-but-usable data when breaker opens (with warning).
+- Provide offline mode flag to skip remote calls and revert to local defaults during prolonged outages.
+- For non-critical commands, queue requests for later retry (disk-backed queue) and inform user where queued tasks are stored.
 
 ### Resource Cleanup
 - **Current**: File streams opened but not explicitly closed in all error paths
@@ -184,6 +241,22 @@ export async function handleStream(response, options = {}) {
   }
 }
 ```
+
+### Configuration Model
+- Add new config surface in `routerx.config.json` (or `.env`) for resilience (`timeoutMs`, `maxRetries`, `breakerThreshold`, `breakerCooldownMs`, `retryJitterRange`).
+- Expose a CLI command `routerx diagnostics resilience` to print current effective configuration and breaker status.
+- Document precedence order: CLI flag > env var > config file > defaults.
+
+### Testing and Validation Strategy
+- **Unit tests**: Cover retry jitter calculations, breaker state transitions, and abort propagation.
+- **Integration tests**: Use mocked API client to simulate transient 5xx, network timeouts, and long tails; verify fallback behaviour and user messaging.
+- **Chaos tests**: Introduce failure injection harness (`npm run chaos:api`) that randomly drops calls to validate breaker and retry interplay.
+- **Load tests**: Ensure resilience controls do not introduce unacceptable latency under concurrent CLI usage; tune backoff parameters accordingly.
+
+### Operational Runbooks
+- Playbook for interpreting breaker alerts: capture logs, inspect metrics, optionally increase cooldown via config override.
+- Guidelines for incident commanders on toggling offline mode, clearing queued requests, and restoring default policies post-incident.
+- Maintenance procedures for rotating resilience-related secrets or tokens without downtime.
 
 ## 3. Observability and Logging
 

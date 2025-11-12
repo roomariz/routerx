@@ -2,10 +2,12 @@ import chalk from 'chalk';
 import path from 'path';
 import { ApiClient } from '../../infrastructure/api/index.js';
 import { ConfigManager } from '../../infrastructure/config/index.js';
-import { fileExists, readFileContent, writeFileContent, ensureDirectory, resolvePath } from '../../shared/utils/file.js';
-import { ERROR_MESSAGES, LOG_MESSAGES, DEFAULT_VALUES, FREE_MODEL_KEYWORDS, CODE_MODEL_KEYWORDS } from '../../shared/constants/index.js';
+import { fileExists, readFileContent, writeFileContent, ensureDirectory } from '../../shared/utils/file.js';
+import { ERROR_MESSAGES, LOG_MESSAGES, CODE_MODEL_KEYWORDS } from '../../shared/constants/index.js';
 import { validateApiKey } from '../../shared/utils/auth.js';
 import { handleError, handleAPIError, exitWithError } from '../../shared/utils/error.js';
+import { createResiliencePolicy, resolveResilienceOverridesFromOptions } from '../../resilience/index.js';
+import { logger } from '../../monitoring/logger.js';
 
 // Initialize configuration manager and load config
 const configManager = new ConfigManager();
@@ -30,6 +32,16 @@ export async function handleCodeCommand(mode, target, options) {
   if (!apiKey) {
     exitWithError(ERROR_MESSAGES.MISSING_API_KEY);
   }
+
+  const resilienceOverrides = resolveResilienceOverridesFromOptions(options);
+  if (Object.keys(resilienceOverrides).length > 0) {
+    logger.info('Applying resilience overrides for code command', {
+      overrides: resilienceOverrides
+    });
+  }
+
+  const resiliencePolicy = createResiliencePolicy(config, resilienceOverrides);
+  const apiClient = new ApiClient(config, { resiliencePolicy, logger });
 
   const baseUrl = config.defaultBaseUrl; // Use base URL from config
 
@@ -84,11 +96,8 @@ export async function handleCodeCommand(mode, target, options) {
   console.log(chalk.blue(LOG_MESSAGES.CODE_MODE), modeLower, '\n');
 
   try {
-    // Initialize API client with config for this request
-    const apiClientInstance = new ApiClient(config);
-    
     // Make the API request
-    const res = await apiClientInstance.makeGeneralChat(apiKey, model, prompt, baseUrl);
+    const res = await apiClient.makeGeneralChat(apiKey, model, prompt, baseUrl);
 
     // Extract and display the response
     const reply = res.data?.choices?.[0]?.message?.content || '(no reply)';
@@ -115,10 +124,8 @@ export async function handleCodeCommand(mode, target, options) {
       let fallback = config.defaultModel; // Declare outside try block for access in catch
       try {
         // Initialize a new API client for fallback operations
-        const fallbackApiClient = new ApiClient(config);
-        
         // Fetch available models
-        const resList = await fallbackApiClient.fetchModels(baseUrl);
+        const resList = await apiClient.fetchModels(baseUrl);
         const freeModels = resList.data.data
           .map((m) => m.id)
           .filter((id) => /(:free|-free|\/free)/i.test(id));
@@ -145,7 +152,7 @@ export async function handleCodeCommand(mode, target, options) {
         }
 
         // Try with the fallback model
-        const res2 = await fallbackApiClient.makeGeneralChat(apiKey, fallback, prompt, baseUrl);
+        const res2 = await apiClient.makeGeneralChat(apiKey, fallback, prompt, baseUrl);
 
         const reply2 = res2.data?.choices?.[0]?.message?.content || '(no reply)';
         console.log(chalk.green('\n💬 Reply:\n') + reply2);
@@ -169,10 +176,8 @@ export async function handleCodeCommand(mode, target, options) {
           console.log(chalk.yellow('⚠️ Preferred free model is rate-limited. Trying next available free model...\n'));
           try {
             // Initialize a new API client for alternate fallback operations
-            const alternateApiClient = new ApiClient(config);
-            
             // Fetch models again for second fallback attempt
-            const resList2 = await alternateApiClient.fetchModels(baseUrl);
+            const resList2 = await apiClient.fetchModels(baseUrl);
             const freeModels2 = resList2.data.data
               .map((m) => m.id)
               .filter((id) => /(:free|-free|\/free)/i.test(id));
@@ -185,7 +190,7 @@ export async function handleCodeCommand(mode, target, options) {
             console.log(chalk.cyan(`🧠 Retrying with alternate model:`), chalk.yellow(nextFree));
 
             // Try with the second fallback model
-            const res3 = await alternateApiClient.makeGeneralChat(apiKey, nextFree, prompt, baseUrl);
+            const res3 = await apiClient.makeGeneralChat(apiKey, nextFree, prompt, baseUrl);
 
             const reply3 = res3.data?.choices?.[0]?.message?.content || '(no reply)';
             console.log(chalk.green('\n💬 Reply:\n') + reply3);
