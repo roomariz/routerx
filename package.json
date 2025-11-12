@@ -7,7 +7,7 @@
     "routerx": "./bin/routerx.js"
   },
   "scripts": {
-    "test": "npx jest --no-cache",
+    "test": "node node_modules/jest/bin/jest.js --no-cache",
     "test:unit": "npx jest --testPathPattern=tests/unit --no-cache",
     "test:integration": "npx jest --testPathPattern=tests/integration --no-cache",
     "test:all": "npx jest --no-cache",
