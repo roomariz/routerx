@@ -8,6 +8,7 @@ Welcome to the RouterX documentation hub. This directory contains detailed docum
 - [Code of Conduct](./CODE_OF_CONDUCT.md) - Our community guidelines and expectations
 - [Changelog](./CHANGELOG.md) - History of changes and releases
 - [Testing Documentation](./TESTING.md) - Details about the test suite and how to run tests
+- [Operational Upgrade Guide](./UPGRADE.md) - How to enable reliability flags, logging mitigations, and success metrics
 
 ## About RouterX
 

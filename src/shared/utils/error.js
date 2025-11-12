@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { ERROR_MESSAGES } from '../constants/index.js';
 import { APIError, RouterXError, ConfigError, FileError, ValidationError } from './routerxError.js';
 import { metrics } from '../../monitoring/metrics.js';
+import { successMetrics } from '../../monitoring/successMetrics.js';
 
 /**
  * Handle errors consistently with uniform console output
@@ -27,6 +28,11 @@ export function handleError(err, context = 'REQUEST_ERROR', additionalContext = 
     context,
     type: err?.code || err?.name || 'Error'
   });
+  const incidentId = additionalContext?.incidentId || err?.context?.incidentId || err?.incidentId;
+  successMetrics.recordErrorLogged({
+    incidentId,
+    code: err?.code || err?.name
+  });
 }
 
 /**
@@ -36,29 +42,31 @@ export function handleError(err, context = 'REQUEST_ERROR', additionalContext = 
  * @returns {RouterXError} Formatted error
  */
 export function handleAPIError(error, context = {}) {
+  const incidentId = error?.incidentId || context?.incidentId;
+  const contextWithIncident = incidentId ? { ...context, incidentId } : context;
   let apiError;
-  
+
   if (error.response) {
     // Server responded with error status
     const { status, data } = error.response;
     apiError = new APIError(
       `API Error: ${status} - ${data.error?.message || 'Unknown error'}`,
       `API_ERROR_${status}`,
-      { ...context, status, response: data }
+      { ...contextWithIncident, status, response: data }
     );
   } else if (error.request) {
     // Request was made but no response received
     apiError = new APIError(
       'Network Error: Request failed to reach the server',
       'NETWORK_ERROR',
-      { ...context, request: error.request }
+      { ...contextWithIncident, request: error.request }
     );
   } else {
     // Something else happened
     apiError = new APIError(
       `Request Error: ${error.message}`,
       'REQUEST_ERROR',
-      { ...context, originalMessage: error.message }
+      { ...contextWithIncident, originalMessage: error.message }
     );
   }
   

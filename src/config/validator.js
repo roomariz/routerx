@@ -36,6 +36,14 @@ export class ConfigValidator {
       this.validateResilience(config.resilience, errors);
     }
 
+    if (config.features !== undefined) {
+      if (!config.features || typeof config.features !== 'object') {
+        errors.push('features must be a configuration object');
+      } else {
+        this.validateFeatures(config.features, errors);
+      }
+    }
+
     if (errors.length > 0) {
       const error = createRouterXError(
         `Configuration validation failed: ${errors.join(', ')}`,
@@ -95,6 +103,25 @@ export class ConfigValidator {
     }
   }
 
+  static validateFeatures(features, errors) {
+    const allowedKeys = [
+      'monitoringAsyncLogging',
+      'monitoringLogSampling',
+      'successMetricsTracking',
+      'resilienceTelemetry'
+    ];
+
+    for (const [key, value] of Object.entries(features)) {
+      if (!allowedKeys.includes(key)) {
+        continue;
+      }
+
+      if (typeof value !== 'boolean') {
+        errors.push(`features.${key} must be a boolean`);
+      }
+    }
+  }
+
   static isValidUrl(url) {
     try {
       new URL(url);
@@ -104,4 +131,3 @@ export class ConfigValidator {
     }
   }
 }
-

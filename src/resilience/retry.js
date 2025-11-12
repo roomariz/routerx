@@ -79,7 +79,9 @@ export async function retryWithBackoff(operation, options = {}) {
     signal,
     deadlineMs,
     shouldRetry = DEFAULT_SHOULD_RETRY,
-    onRetry = () => {}
+    onRetry = () => {},
+    onAttemptSuccess,
+    onGiveUp
   } = options;
 
   let attempt = 0;
@@ -93,7 +95,15 @@ export async function retryWithBackoff(operation, options = {}) {
 
     try {
       const context = { attempt, maxRetries, signal };
-      return await operation(context);
+      const result = await operation(context);
+      if (typeof onAttemptSuccess === 'function') {
+        await onAttemptSuccess({
+          attempt,
+          attemptNumber: attempt + 1,
+          maxRetries
+        });
+      }
+      return result;
     } catch (error) {
       lastError = error;
 
@@ -127,6 +137,15 @@ export async function retryWithBackoff(operation, options = {}) {
     }
 
     attempt += 1;
+  }
+
+  if (typeof onGiveUp === 'function') {
+    await onGiveUp({
+      attempt,
+      attemptNumber: attempt + 1,
+      maxRetries,
+      error: lastError
+    });
   }
 
   throw lastError;

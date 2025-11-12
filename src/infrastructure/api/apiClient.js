@@ -5,6 +5,7 @@ import { CircuitBreaker } from '../../resilience/circuitBreaker.js';
 import { createResiliencePolicy } from '../../resilience/policy.js';
 import { logger as defaultLogger } from '../../monitoring/logger.js';
 import { metrics } from '../../monitoring/metrics.js';
+import { successMetrics } from '../../monitoring/successMetrics.js';
 import { handleAPIError, createRouterXError } from '../../shared/utils/error.js';
 import { RouterXError } from '../../shared/utils/routerxError.js';
 
@@ -91,11 +92,24 @@ class ApiClient {
       finalRetryOptions.shouldRetry = shouldRetry;
     }
 
-    const userOnRetry = finalRetryOptions.onRetry;
     const metricLabels = { operation: operationName };
     const startedAt = Date.now();
+    const incidentId = `${operationName}-${startedAt}-${Math.random().toString(36).slice(2, 8)}`;
+    let lastAttemptNumber = 1;
+    let retried = false;
+    let failureRecorded = false;
+
+    const userOnRetry = finalRetryOptions.onRetry;
+    const userOnAttemptSuccess = finalRetryOptions.onAttemptSuccess;
+    const userOnGiveUp = finalRetryOptions.onGiveUp;
 
     finalRetryOptions.onRetry = async (info) => {
+      retried = true;
+      successMetrics.recordResilienceEvent('retry_attempt', {
+        operation: operationName,
+        attempt: info.attemptNumber ?? info.attempt,
+        incidentId
+      });
       this.logger?.warn?.('Retrying API operation', {
         operation: operationName,
         attempt: info.attempt,
@@ -112,6 +126,69 @@ class ApiClient {
       }
     };
 
+    finalRetryOptions.onAttemptSuccess = async (info) => {
+      lastAttemptNumber = info.attemptNumber ?? (info.attempt + 1);
+      if (typeof userOnAttemptSuccess === 'function') {
+        await userOnAttemptSuccess(info);
+      }
+    };
+
+    finalRetryOptions.onGiveUp = async (info) => {
+      failureRecorded = true;
+      const attempts = info.attemptNumber ?? (info.attempt + 1);
+      const durationMs = Date.now() - startedAt;
+      successMetrics.recordApiCall({
+        operation: operationName,
+        success: false,
+        attempts,
+        durationMs,
+        incidentId
+      });
+      successMetrics.recordResilienceEvent('failure', {
+        operation: operationName,
+        attempts,
+        incidentId
+      });
+      if (retried) {
+        successMetrics.recordIncidentDuration(durationMs, {
+          operation: operationName,
+          incidentId,
+          resolved: false
+        });
+      }
+      if (typeof userOnGiveUp === 'function') {
+        await userOnGiveUp(info);
+      }
+    };
+
+    const recordFailureMetrics = (durationMs) => {
+      if (failureRecorded) {
+        return;
+      }
+      successMetrics.recordApiCall({
+        operation: operationName,
+        success: false,
+        attempts: lastAttemptNumber,
+        durationMs,
+        incidentId
+      });
+      successMetrics.recordResilienceEvent('failure', {
+        operation: operationName,
+        attempts: lastAttemptNumber,
+        incidentId
+      });
+      if (retried) {
+        successMetrics.recordIncidentDuration(durationMs, {
+          operation: operationName,
+          incidentId,
+          resolved: false
+        });
+      }
+      failureRecorded = true;
+    };
+
+    const breakerMetadata = { ...breakerContext, operation: operationName, incidentId };
+
     try {
       const result = await this.circuitBreaker.execute(
         () => retryWithBackoff(
@@ -122,7 +199,7 @@ class ApiClient {
           }),
           finalRetryOptions
         ),
-        { ...breakerContext, operation: operationName }
+        breakerMetadata
       );
 
       const durationMs = Date.now() - startedAt;
@@ -134,6 +211,25 @@ class ApiClient {
         status: 'success'
       });
       metrics.incrementCounter('api.operation.success_total', 1, metricLabels);
+      successMetrics.recordApiCall({
+        operation: operationName,
+        success: true,
+        attempts: lastAttemptNumber,
+        durationMs,
+        incidentId
+      });
+      if (retried) {
+        successMetrics.recordResilienceEvent('automatic_recovery', {
+          operation: operationName,
+          attempts: lastAttemptNumber,
+          incidentId
+        });
+        successMetrics.recordIncidentDuration(durationMs, {
+          operation: operationName,
+          incidentId,
+          resolved: true
+        });
+      }
 
       return result;
     } catch (error) {
@@ -143,7 +239,7 @@ class ApiClient {
         const timeoutError = createRouterXError(
           `Operation '${operationName}' timed out after ${timeoutMs}ms`,
           'REQUEST_TIMEOUT',
-          { ...breakerContext, operation: operationName, timeoutMs },
+          { ...breakerMetadata, timeoutMs },
           'api'
         );
 
@@ -152,12 +248,14 @@ class ApiClient {
           timeoutMs
         });
 
-         metrics.recordLatency('api.operation.duration_ms', durationMs, {
+        metrics.recordLatency('api.operation.duration_ms', durationMs, {
            operation: operationName,
            status: 'timeout'
          });
          metrics.incrementCounter('api.operation.timeout_total', 1, metricLabels);
+        recordFailureMetrics(durationMs);
 
+        timeoutError.incidentId = incidentId;
         throw timeoutError;
       }
 
@@ -174,6 +272,11 @@ class ApiClient {
         ...metricLabels,
         error: error.code || error.name || 'error'
       });
+      recordFailureMetrics(durationMs);
+
+      if (error && typeof error === 'object' && !error.incidentId) {
+        error.incidentId = incidentId;
+      }
 
       throw error;
     } finally {

@@ -239,18 +239,18 @@ describe('Streaming Performance Tests', () => {
     // Simulate a delay before sending first token to test time-to-first-token
     setTimeout(() => {
       mockStream.push(`data: ${JSON.stringify({ choices: [{ delta: { content: 'First' } }] })}\n\n`);
-    }, 50); // 50ms delay before first token
+    }, 70); // 70ms delay before first token to provide buffer for timing variance
     
     setTimeout(() => {
       mockStream.push(`data: ${JSON.stringify({ choices: [{ delta: { content: ' token' } }] })}\n\n`);
       mockStream.push('data: [DONE]\n\n');
       mockStream.push(null); // End stream
-    }, 100); // Additional 50ms for subsequent tokens
+    }, 140); // Additional 70ms for subsequent tokens
     
     const mockResponse = { data: mockStream };
     mockAxios.mockResolvedValue(mockResponse);
 
-    return new Promise((resolve) => {
+    await new Promise((resolve, reject) => {
       const startTime = Date.now();
       let firstTokenReceived = false;
       let firstTokenTime = 0;
@@ -261,7 +261,7 @@ describe('Streaming Performance Tests', () => {
         mockPrompt,
         mockBaseUrl
       ).then(response => {
-        response.data.on('data', (chunk) => {
+        response.data.on('data', () => {
           if (!firstTokenReceived) {
             firstTokenReceived = true;
             firstTokenTime = Date.now();
@@ -273,13 +273,17 @@ describe('Streaming Performance Tests', () => {
           const totalTime = Date.now() - startTime;
           console.log(`⏱️  Total streaming time: ${totalTime}ms`);
           
-          // Verify the timing is within expected bounds
-          expect(totalTime).toBeGreaterThanOrEqual(100); // Should take at least 100ms due to delays
-          expect(firstTokenTime - startTime).toBeGreaterThanOrEqual(50); // First token after 50ms delay
-          
-          resolve();
+          try {
+            expect(totalTime).toBeGreaterThanOrEqual(120); // Should take at least 120ms due to delays
+            expect(firstTokenTime - startTime).toBeGreaterThanOrEqual(60); // First token after ~70ms delay
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
         });
-      });
+
+        response.data.on('error', reject);
+      }).catch(reject);
     });
   });
 });

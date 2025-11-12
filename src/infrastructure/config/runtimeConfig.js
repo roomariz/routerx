@@ -2,6 +2,7 @@
 // Provides a cached view of the loaded configuration so it can be shared across the CLI
 
 import ConfigManager from './index.js';
+import { configureFeatureFlags } from '../../shared/utils/featureFlags.js';
 
 const configManager = new ConfigManager();
 let runtimeConfig = null;
@@ -12,6 +13,7 @@ let runtimeConfig = null;
  */
 export function loadRuntimeConfig() {
   runtimeConfig = configManager.loadConfig();
+  configureFeatureFlags(runtimeConfig.features || {}, { source: 'config' });
   return runtimeConfig;
 }
 

@@ -5,3 +5,4 @@ export * from './auth.js';
 export * from './error.js';
 export * from './file.js';
 export * from './stream.js';
+export * from './featureFlags.js';

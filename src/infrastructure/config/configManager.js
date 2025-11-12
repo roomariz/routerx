@@ -5,6 +5,7 @@ import os from 'os';
 import { ConfigValidator } from '../../config/index.js';
 import { logger } from '../../monitoring/logger.js';
 import { createRouterXError } from '../../shared/utils/error.js';
+import { applyConfigCompatibility } from './compatibility.js';
 
 /**
  * Configuration Manager for RouterX
@@ -28,6 +29,12 @@ class ConfigManager {
         breakerCooldownMs: 60000,
         breakerHalfOpenSuccesses: 1,
         breakerHalfOpenFailures: 1
+      },
+      features: {
+        monitoringAsyncLogging: false,
+        monitoringLogSampling: false,
+        successMetricsTracking: true,
+        resilienceTelemetry: true
       }
     };
   }
@@ -63,7 +70,8 @@ class ConfigManager {
         }
       }
 
-      const finalConfig = this.applyEnvironmentOverrides(activeConfig, logContext);
+      const compatibleConfig = this.applyCompatibilityLayer(activeConfig, logContext);
+      const finalConfig = this.applyEnvironmentOverrides(compatibleConfig, logContext);
       ConfigValidator.validate(finalConfig);
       return finalConfig;
     } catch (error) {
@@ -76,7 +84,8 @@ class ConfigManager {
         error: this.sanitizeErrorMessage(error)
       });
 
-      const fallbackConfig = this.applyEnvironmentOverrides(this.cloneConfig(this.getDefaultConfig()), logContext);
+      const fallbackCompatible = this.applyCompatibilityLayer(this.cloneConfig(this.getDefaultConfig()), logContext);
+      const fallbackConfig = this.applyEnvironmentOverrides(fallbackCompatible, logContext);
       ConfigValidator.validate(fallbackConfig);
       return fallbackConfig;
     }
@@ -180,12 +189,16 @@ class ConfigManager {
   }
 
   cloneConfig(config) {
-    return {
+    const cloned = {
       ...config,
-      resilience: {
-        ...config.resilience
-      }
+      resilience: config.resilience ? { ...config.resilience } : undefined
     };
+
+    if (Object.prototype.hasOwnProperty.call(config, 'features')) {
+      cloned.features = config.features ? { ...config.features } : config.features;
+    }
+
+    return cloned;
   }
 
   mergeConfig(baseConfig, overrides) {
@@ -208,14 +221,44 @@ class ConfigManager {
         continue;
       }
 
+      if (key === 'features' && value && typeof value === 'object') {
+        merged.features = {
+          ...merged.features,
+          ...value
+        };
+        continue;
+      }
+
       if (value !== undefined) {
         merged[key] = value;
       }
     }
 
-    merged.resilience = merged.resilience || { ...baseConfig.resilience };
-    merged.resilience.timeoutMs = merged.resilience.timeoutMs ?? merged.timeout;
-    merged.resilience.maxRetries = merged.resilience.maxRetries ?? merged.maxRetries;
+    if (baseConfig.resilience) {
+      merged.resilience = merged.resilience || { ...baseConfig.resilience };
+      if (merged.resilience) {
+        merged.resilience.timeoutMs = merged.resilience.timeoutMs ?? merged.timeout;
+        merged.resilience.maxRetries = merged.resilience.maxRetries ?? merged.maxRetries;
+      }
+    } else {
+      delete merged.resilience;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(baseConfig, 'features')) {
+      if (merged.features) {
+        const baseFeatures = baseConfig.features ? { ...baseConfig.features } : {};
+        merged.features = {
+          ...baseFeatures,
+          ...merged.features
+        };
+      } else if (baseConfig.features) {
+        merged.features = { ...baseConfig.features };
+      } else {
+        merged.features = baseConfig.features;
+      }
+    } else {
+      delete merged.features;
+    }
 
     return merged;
   }
@@ -235,9 +278,29 @@ class ConfigManager {
     return mergedConfig;
   }
 
+  applyCompatibilityLayer(config, logContext) {
+    try {
+      const { config: adjustedConfig, notices } = applyConfigCompatibility(config);
+      if (Array.isArray(notices) && notices.length > 0) {
+        logger.warn('Applied legacy configuration mappings', {
+          ...logContext,
+          compatibilityNotices: notices
+        });
+      }
+      return adjustedConfig;
+    } catch (error) {
+      logger.warn('Failed to apply compatibility layer', {
+        ...logContext,
+        error: this.sanitizeErrorMessage(error)
+      });
+      return config;
+    }
+  }
+
   getEnvironmentOverrides() {
     const overrides = {};
     const resilienceOverrides = {};
+    const featureOverrides = {};
     const appliedKeys = [];
 
     const assignString = (envKey, targetKey) => {
@@ -264,6 +327,22 @@ class ConfigManager {
       appliedKeys.push(envKey);
     };
 
+    const assignBoolean = (envKey, targetKey) => {
+      const parsed = this.parseBooleanEnv(envKey);
+      if (parsed === undefined) {
+        return;
+      }
+
+      if (targetKey.startsWith('features.')) {
+        const key = targetKey.split('.')[1];
+        featureOverrides[key] = parsed;
+      } else {
+        overrides[targetKey] = parsed;
+      }
+
+      appliedKeys.push(envKey);
+    };
+
     assignString('ROUTERX_DEFAULT_MODEL', 'defaultModel');
     assignString('ROUTERX_DEFAULT_BASE_URL', 'defaultBaseUrl');
     assignString('ROUTERX_DEFAULT_SAVE_PATH', 'defaultSavePath');
@@ -281,8 +360,17 @@ class ConfigManager {
     assignNumber('ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_SUCCESSES', 'resilience.breakerHalfOpenSuccesses', { integer: true });
     assignNumber('ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_FAILURES', 'resilience.breakerHalfOpenFailures', { integer: true });
 
+    assignBoolean('ROUTERX_FEATURE_MONITORING_ASYNC_LOGGING', 'features.monitoringAsyncLogging');
+    assignBoolean('ROUTERX_FEATURE_MONITORING_LOG_SAMPLING', 'features.monitoringLogSampling');
+    assignBoolean('ROUTERX_FEATURE_SUCCESS_METRICS', 'features.successMetricsTracking');
+    assignBoolean('ROUTERX_FEATURE_RESILIENCE_TELEMETRY', 'features.resilienceTelemetry');
+
     if (Object.keys(resilienceOverrides).length > 0) {
       overrides.resilience = resilienceOverrides;
+    }
+
+    if (Object.keys(featureOverrides).length > 0) {
+      overrides.features = featureOverrides;
     }
 
     return { overrides, appliedKeys };
@@ -310,6 +398,35 @@ class ConfigManager {
     }
 
     return parsed;
+  }
+
+  parseBooleanEnv(envKey) {
+    if (!(envKey in process.env)) {
+      return undefined;
+    }
+
+    const rawValue = process.env[envKey];
+    if (rawValue === undefined || rawValue === null || rawValue === '') {
+      return undefined;
+    }
+
+    const normalized = rawValue.toString().trim().toLowerCase();
+
+    if (['1', 'true', 'on', 'yes'].includes(normalized)) {
+      return true;
+    }
+
+    if (['0', 'false', 'off', 'no'].includes(normalized)) {
+      return false;
+    }
+
+    logger.warn('Ignoring invalid boolean environment override', {
+      operation: 'loadConfig',
+      envKey,
+      rawValue
+    });
+
+    return undefined;
   }
 
   createValidationFailureError(error, configPath) {

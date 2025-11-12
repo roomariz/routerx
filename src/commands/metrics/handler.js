@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getMetricsSnapshot } from '../../monitoring/metrics.js';
+import { getSuccessMetricsReport } from '../../monitoring/successMetrics.js';
 import { logger as baseLogger } from '../../monitoring/logger.js';
 import { handleError } from '../../shared/utils/error.js';
 
@@ -29,7 +30,32 @@ function formatBucketSummary(buckets = []) {
     .join(', ');
 }
 
-function formatMetricsReport(snapshot) {
+function formatSuccessMetricsSection(report) {
+  const lines = [];
+  if (!report || report.enabled === false) {
+    lines.push('  - Success metrics tracking disabled');
+    if (report?.reason) {
+      lines.push(`    reason: ${report.reason}`);
+    }
+    return lines;
+  }
+
+  const metrics = Array.isArray(report.metrics) ? report.metrics : [];
+  if (metrics.length === 0) {
+    lines.push('  - No success metrics have been recorded yet');
+    return lines;
+  }
+
+  for (const metric of metrics) {
+    lines.push(
+      `  - ${metric.label}: ${metric.current} (target ${metric.target}) — ${metric.status}`
+    );
+  }
+
+  return lines;
+}
+
+function formatMetricsReport(snapshot, successReport) {
   const lines = [
     'RouterX Metrics Snapshot',
     `Timestamp: ${snapshot?.timestamp || 'unknown'}`
@@ -80,6 +106,12 @@ function formatMetricsReport(snapshot) {
     }
   }
 
+  lines.push('', 'Success Metrics');
+  const successLines = formatSuccessMetricsSection(successReport);
+  for (const successLine of successLines) {
+    lines.push(successLine);
+  }
+
   return lines.join('\n');
 }
 
@@ -100,6 +132,7 @@ export async function handleMetricsCommand(options = {}, context = {}) {
   const { logger: commandLogger = baseLogger, traceId } = context;
   try {
     const snapshot = getMetricsSnapshot();
+    const successReport = getSuccessMetricsReport();
     let resolvedOutputPath;
 
     if (options.output) {
@@ -109,7 +142,7 @@ export async function handleMetricsCommand(options = {}, context = {}) {
     if (options.json) {
       console.log(JSON.stringify(snapshot, null, 2));
     } else {
-      console.log(formatMetricsReport(snapshot));
+      console.log(formatMetricsReport(snapshot, successReport));
       if (resolvedOutputPath) {
         console.log(`Snapshot also written to: ${resolvedOutputPath}`);
       }
@@ -119,7 +152,12 @@ export async function handleMetricsCommand(options = {}, context = {}) {
       traceId,
       counters: snapshot?.counters?.length || 0,
       histograms: snapshot?.histograms?.length || 0,
-      outputPath: resolvedOutputPath
+      outputPath: resolvedOutputPath,
+      successMetricsEnabled: successReport?.enabled !== false,
+      successMetricsStatuses: successReport?.metrics?.map((metric) => ({
+        key: metric.key,
+        status: metric.status
+      }))
     });
 
     return snapshot;

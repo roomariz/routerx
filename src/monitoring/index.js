@@ -7,3 +7,4 @@ export {
   DEFAULT_LATENCY_BUCKETS,
   getMetricsSnapshot
 } from './metrics.js';
+export { successMetrics, getSuccessMetricsReport } from './successMetrics.js';
