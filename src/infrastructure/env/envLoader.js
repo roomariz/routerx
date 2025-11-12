@@ -54,7 +54,4 @@ function loadEnvFile(filePath = '.env') {
   }
 }
 
-// Auto-load .env file on import, similar to dotenv/config
-loadEnvFile();
-
 export default { loadEnvFile };

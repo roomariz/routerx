@@ -3,6 +3,7 @@
 
 import { RouterXError } from '../shared/utils/routerxError.js';
 import { createRouterXError } from '../shared/utils/error.js';
+import envLoader from '../infrastructure/env/envLoader.js';
 
 /**
  * Set up global error handlers for the application
@@ -95,6 +96,9 @@ export function bootstrap(options = {}) {
   const { enableGlobalHandlers = true } = options;
 
   try {
+    // Load environment variables from .env file
+    envLoader.loadEnvFile();
+
     if (enableGlobalHandlers) {
       setupGlobalErrorHandlers();
     }

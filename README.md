@@ -371,6 +371,36 @@ File: /Users/me/routerx-config.json
 Update the configuration file (or remove it to fall back to defaults) and rerun the CLI.
 ```
 
+### Environment Overrides
+
+Use environment variables to override individual configuration values without editing `config.json`. These overrides apply after RouterX loads and validates any config files, and invalid override values will stop startup with the same validation errors shown above.
+
+| Variable | Description |
+| --- | --- |
+| `ROUTERX_CONFIG_PATH` | Absolute or relative path to the configuration file to load first. |
+| `ROUTERX_DEFAULT_MODEL` | Overrides `defaultModel`. |
+| `ROUTERX_DEFAULT_BASE_URL` | Overrides `defaultBaseUrl`. |
+| `ROUTERX_DEFAULT_SAVE_PATH` | Overrides `defaultSavePath`. |
+| `ROUTERX_TIMEOUT` | Overrides global `timeout` in milliseconds. |
+| `ROUTERX_MAX_RETRIES` | Overrides global `maxRetries`. |
+| `ROUTERX_RESILIENCE_TIMEOUT_MS` | Overrides `resilience.timeoutMs`. |
+| `ROUTERX_RESILIENCE_MAX_RETRIES` | Overrides `resilience.maxRetries`. |
+| `ROUTERX_RESILIENCE_BASE_DELAY_MS` | Overrides `resilience.baseDelayMs`. |
+| `ROUTERX_RESILIENCE_MAX_DELAY_MS` | Overrides `resilience.maxDelayMs`. |
+| `ROUTERX_RESILIENCE_JITTER_MS` | Overrides `resilience.jitterMs`. |
+| `ROUTERX_RESILIENCE_BREAKER_THRESHOLD` | Overrides `resilience.breakerThreshold`. |
+| `ROUTERX_RESILIENCE_BREAKER_COOLDOWN_MS` | Overrides `resilience.breakerCooldownMs`. |
+| `ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_SUCCESSES` | Overrides `resilience.breakerHalfOpenSuccesses`. |
+| `ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_FAILURES` | Overrides `resilience.breakerHalfOpenFailures`. |
+
+Example:
+
+```bash
+export ROUTERX_CONFIG_PATH=$HOME/prod/routerx.json
+export ROUTERX_DEFAULT_MODEL=openai/gpt-4o-mini
+export ROUTERX_TIMEOUT=45000
+```
+
 ## Troubleshooting
 
 - **API Key Issues**: Ensure your API keys are properly set in the environment

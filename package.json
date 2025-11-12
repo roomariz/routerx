@@ -13,8 +13,9 @@
     "test:all": "npx jest --no-cache",
     "test:watch": "npx jest --watch",
     "test:coverage": "npx jest --collectCoverageFrom=\"src/**/*.js\" --coverage --no-cache",
-    "test:check": "node test-runner.js",
-    "benchmark": "node benchmark.js"
+    "test:runner": "node test-runner.js",
+    "benchmark": "node benchmark.js",
+    "ci:check": "npm run test:coverage && npm audit --audit-level moderate && npm run benchmark"
   },
   "keywords": [
     "cli",

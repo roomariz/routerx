@@ -27,6 +27,11 @@ const program = createProgram();
 // Setup all commands
 setupCLI(program);
 
+// Show help when no command is provided so Commander can still enforce unknown commands
+if (process.argv.length <= 2) {
+  program.help({ error: false });
+}
+
 // Parse and execute the command
 program.parse();
 

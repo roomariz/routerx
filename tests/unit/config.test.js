@@ -23,15 +23,23 @@ jest.mock('../../src/monitoring/logger.js', () => ({
 describe('ConfigManager', () => {
   let configManager;
   let originalCwd;
+  let envBackup;
 
   beforeEach(() => {
     configManager = new ConfigManager();
     originalCwd = process.cwd;
     process.cwd = () => '/test/current/directory';
+    envBackup = { ...process.env };
   });
 
   afterEach(() => {
     process.cwd = originalCwd;
+    for (const key of Object.keys(process.env)) {
+      if (!(key in envBackup)) {
+        delete process.env[key];
+      }
+    }
+    Object.assign(process.env, envBackup);
   });
 
   describe('getDefaultConfig', () => {
@@ -143,7 +151,7 @@ describe('ConfigManager', () => {
       consoleSpy.mockRestore();
     });
 
-    test('throws when configuration validation fails', () => {
+    test('throws when configuration file fails validation', () => {
       os.homedir = jest.fn().mockReturnValue('/home/user');
       fs.existsSync = jest.fn().mockImplementation((filePath) => filePath.includes('config.json'));
       fs.readFileSync = jest.fn().mockReturnValue(JSON.stringify({
@@ -155,13 +163,46 @@ describe('ConfigManager', () => {
 
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-      expect(() => configManager.loadConfig()).toThrow(/failed validation/);
+      expect(() => configManager.loadConfig()).toThrow(/failed validation/i);
+
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Validation error in config file'),
         expect.stringContaining('timeout must be a positive number')
       );
 
       consoleSpy.mockRestore();
+    });
+
+    test('prioritizes ROUTERX_CONFIG_PATH when environment variable is set', () => {
+      const customPath = path.resolve('/custom/routerx-config.json');
+      process.env.ROUTERX_CONFIG_PATH = customPath;
+      os.homedir = jest.fn().mockReturnValue('/home/user');
+
+      fs.existsSync = jest.fn().mockImplementation((filePath) => filePath === customPath);
+      fs.readFileSync = jest.fn().mockReturnValue(JSON.stringify({
+        defaultModel: 'env-config/model'
+      }));
+
+      const config = configManager.loadConfig();
+
+      expect(fs.existsSync).toHaveBeenCalledWith(customPath);
+      expect(config.defaultModel).toBe('env-config/model');
+    });
+
+    test('applies environment overrides for configuration values', () => {
+      fs.existsSync = jest.fn().mockReturnValue(false);
+
+      process.env.ROUTERX_DEFAULT_MODEL = 'env/model';
+      process.env.ROUTERX_TIMEOUT = '45000';
+      process.env.ROUTERX_RESILIENCE_MAX_RETRIES = '5';
+      process.env.ROUTERX_RESILIENCE_BASE_DELAY_MS = '1500';
+
+      const config = configManager.loadConfig();
+
+      expect(config.defaultModel).toBe('env/model');
+      expect(config.timeout).toBe(45000);
+      expect(config.resilience.maxRetries).toBe(5);
+      expect(config.resilience.baseDelayMs).toBe(1500);
     });
   });
 

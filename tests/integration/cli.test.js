@@ -172,4 +172,41 @@ describe('CLI Integration Tests', () => {
       done();
     });
   }, 10000);
+
+  test('CLI starts and shows help when run with no arguments', (done) => {
+    const child = spawn('node', ['bin/routerx.js'], {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    let output = '';
+    child.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    child.on('close', (code) => {
+      expect(code).toBe(0);
+      expect(output).toContain('A lightweight CLI for interacting with OpenRouter models');
+      done();
+    });
+  }, 10000);
+
+  test('CLI shows error for invalid command', (done) => {
+    const child = spawn('node', ['bin/routerx.js', 'invalid-command'], {
+      cwd: process.cwd(),
+      env: process.env
+    });
+
+    let stderr = '';
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    child.on('close', (code) => {
+      expect(code).toBe(1);
+      expect(stderr).toContain("error: unknown command 'invalid-command'");
+      done();
+    });
+  }, 10000);
 });

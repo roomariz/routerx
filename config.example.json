@@ -21,6 +21,22 @@
       "breakerHalfOpenFailures": "Required positive integer."
     }
   },
+  "_environmentOverrides": {
+    "ROUTERX_DEFAULT_MODEL": "Overrides defaultModel.",
+    "ROUTERX_DEFAULT_BASE_URL": "Overrides defaultBaseUrl.",
+    "ROUTERX_DEFAULT_SAVE_PATH": "Overrides defaultSavePath.",
+    "ROUTERX_TIMEOUT": "Overrides timeout in milliseconds.",
+    "ROUTERX_MAX_RETRIES": "Overrides maxRetries.",
+    "ROUTERX_RESILIENCE_TIMEOUT_MS": "Overrides resilience.timeoutMs.",
+    "ROUTERX_RESILIENCE_MAX_RETRIES": "Overrides resilience.maxRetries.",
+    "ROUTERX_RESILIENCE_BASE_DELAY_MS": "Overrides resilience.baseDelayMs.",
+    "ROUTERX_RESILIENCE_MAX_DELAY_MS": "Overrides resilience.maxDelayMs.",
+    "ROUTERX_RESILIENCE_JITTER_MS": "Overrides resilience.jitterMs.",
+    "ROUTERX_RESILIENCE_BREAKER_THRESHOLD": "Overrides resilience.breakerThreshold.",
+    "ROUTERX_RESILIENCE_BREAKER_COOLDOWN_MS": "Overrides resilience.breakerCooldownMs.",
+    "ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_SUCCESSES": "Overrides resilience.breakerHalfOpenSuccesses.",
+    "ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_FAILURES": "Overrides resilience.breakerHalfOpenFailures."
+  },
   "defaultModel": "openai/gpt-4o-mini",
   "defaultBaseUrl": "https://openrouter.ai/api/v1",
   "defaultSavePath": "./outputs",

@@ -2,59 +2,9 @@
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import fs from 'fs';
 
-// Create a mock for the envLoader module to avoid import issues
-jest.mock('../../src/infrastructure/env/envLoader.js', () => {
-  // Import the actual module but use spies to test the functionality
-  const fs = jest.requireActual('fs');
-  
-  const loadEnvFile = jest.fn((filePath = '.env') => {
-    try {
-      // Check if the file exists
-      if (fs.existsSync(filePath)) {
-        // Read the file content
-        const content = fs.readFileSync(filePath, 'utf8');
 
-        // Split content by newlines and process each line
-        const lines = content.split(/\r?\n/);
 
-        for (const line of lines) {
-          // Skip empty lines and comments
-          if (line.trim() === '' || line.startsWith('#')) {
-            continue;
-          }
-
-          // Parse key=value pairs
-          const match = line.match(/^([^=]+)=(.*)$/);
-          if (match) {
-            let key = match[1].trim();
-            let value = match[2].trim();
-
-            // Remove surrounding quotes if present
-            if ((value.startsWith('"') && value.endsWith('"')) ||
-                (value.startsWith("'") && value.endsWith("'"))) {
-              value = value.slice(1, -1);
-            }
-
-            // Only set the environment variable if it doesn't already exist
-            if (!process.env.hasOwnProperty(key)) {
-              process.env[key] = value;
-            }
-          }
-        }
-      }
-    } catch (error) {
-      // Silently fail if .env file has issues - similar to dotenv behavior
-      console.warn(`Warning: Could not load .env file: ${error.message}`);
-    }
-  });
-
-  return { 
-    default: { loadEnvFile },
-    loadEnvFile 
-  };
-});
-
-import { loadEnvFile } from '../../src/infrastructure/env/envLoader.js';
+import envLoader from '../../src/infrastructure/env/envLoader.js';
 
 describe('EnvLoader', () => {
   // Save original process.env
@@ -84,7 +34,7 @@ describe('EnvLoader', () => {
       jest.spyOn(fs, 'readFileSync').mockReturnValue(mockEnvContent);
 
       // Call loadEnvFile directly
-      loadEnvFile('.env');
+      envLoader.loadEnvFile('.env');
       
       // Verify fs methods were called correctly
       expect(fs.existsSync).toHaveBeenCalledWith('.env');
@@ -100,7 +50,7 @@ describe('EnvLoader', () => {
       jest.spyOn(fs, 'existsSync').mockReturnValue(true);
       jest.spyOn(fs, 'readFileSync').mockReturnValue(mockEnvContent);
 
-      loadEnvFile('.env');
+      envLoader.loadEnvFile('.env');
       
       // Verify that API_KEY was set but comments were ignored
       expect(process.env.API_KEY).toBe('test123');
@@ -111,7 +61,7 @@ describe('EnvLoader', () => {
       jest.spyOn(fs, 'existsSync').mockReturnValue(true);
       jest.spyOn(fs, 'readFileSync').mockReturnValue(mockEnvContent);
 
-      loadEnvFile('.env');
+      envLoader.loadEnvFile('.env');
       
       expect(process.env.API_KEY).toBe('test123');
     });
@@ -121,7 +71,7 @@ describe('EnvLoader', () => {
       jest.spyOn(fs, 'existsSync').mockReturnValue(true);
       jest.spyOn(fs, 'readFileSync').mockReturnValue(mockEnvContent);
 
-      loadEnvFile('.env');
+      envLoader.loadEnvFile('.env');
       
       expect(process.env.API_KEY).toBe('test123');
       expect(process.env.NAME).toBe('Test App');
@@ -134,7 +84,7 @@ describe('EnvLoader', () => {
       jest.spyOn(fs, 'existsSync').mockReturnValue(true);
       jest.spyOn(fs, 'readFileSync').mockReturnValue(mockEnvContent);
 
-      loadEnvFile('.env');
+      envLoader.loadEnvFile('.env');
       
       // The value should remain original_value, not new_value
       expect(process.env.EXISTING_VAR).toBe('original_value');
@@ -144,7 +94,7 @@ describe('EnvLoader', () => {
       jest.spyOn(fs, 'existsSync').mockReturnValue(false);
 
       expect(() => {
-        loadEnvFile('.env');
+        envLoader.loadEnvFile('.env');
       }).not.toThrow();
     });
 
@@ -158,7 +108,7 @@ describe('EnvLoader', () => {
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       expect(() => {
-        loadEnvFile('.env');
+        envLoader.loadEnvFile('.env');
       }).not.toThrow();
       
       expect(consoleWarnSpy).toHaveBeenCalledWith(

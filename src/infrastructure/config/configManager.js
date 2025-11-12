@@ -46,31 +46,39 @@ class ConfigManager {
    */
   loadConfig() {
     const logContext = { operation: 'loadConfig' };
+    let activeConfig = this.cloneConfig(this.getDefaultConfig());
 
     try {
       const configPaths = this.getConfigPaths();
 
       for (const configPath of configPaths) {
-        if (fs.existsSync(configPath)) {
-          const loadedConfig = this.loadConfigFromPath(configPath, logContext);
-          if (loadedConfig) {
-            return loadedConfig;
-          }
-          return this.getDefaultConfig();
+        if (!fs.existsSync(configPath)) {
+          continue;
+        }
+
+        const loadedConfig = this.loadConfigFromPath(configPath, logContext);
+        if (loadedConfig) {
+          activeConfig = loadedConfig;
+          break;
         }
       }
 
-      logger.info('Using default configuration', logContext);
-      return this.getDefaultConfig();
+      const finalConfig = this.applyEnvironmentOverrides(activeConfig, logContext);
+      ConfigValidator.validate(finalConfig);
+      return finalConfig;
     } catch (error) {
-      logger.error('Configuration loading failed, using defaults', {
-        ...logContext,
-        error: this.sanitizeErrorMessage(error)
-      });
       if (this.isValidationError(error)) {
         throw error;
       }
-      return this.getDefaultConfig();
+
+      logger.error('Unexpected error during configuration loading, using defaults', {
+        ...logContext,
+        error: this.sanitizeErrorMessage(error)
+      });
+
+      const fallbackConfig = this.applyEnvironmentOverrides(this.cloneConfig(this.getDefaultConfig()), logContext);
+      ConfigValidator.validate(fallbackConfig);
+      return fallbackConfig;
     }
   }
 
@@ -79,7 +87,12 @@ class ConfigManager {
    * @returns {string[]} Candidate configuration file paths.
    */
   getConfigPaths() {
-    const paths = [path.join(process.cwd(), 'config.json')];
+    const explicitPath = process.env.ROUTERX_CONFIG_PATH
+      ? path.resolve(process.env.ROUTERX_CONFIG_PATH)
+      : null;
+
+    const paths = explicitPath ? [explicitPath] : [];
+    paths.push(path.join(process.cwd(), 'config.json'));
     const homeDir = os.homedir();
 
     if (homeDir) {
@@ -105,8 +118,7 @@ class ConfigManager {
       logger.info('Configuration loaded successfully', { ...logContext, configPath });
       return mergedConfig;
     } catch (error) {
-      this.handleConfigLoadError(error, configPath, logContext);
-      return null;
+      return this.handleConfigLoadError(error, configPath, logContext);
     }
   }
 
@@ -124,17 +136,19 @@ class ConfigManager {
     });
 
     const sanitizedErrorMessage = this.sanitizeErrorMessage(error);
-    const warningPrefix = this.isValidationError(error)
-      ? '?? Validation error in config file'
-      : '?? Warning: Could not parse config file';
+    const isValidationError = this.isValidationError(error);
+    const warningPrefix = isValidationError
+      ? 'Warning: Validation error in config file'
+      : 'Warning: Could not parse config file';
 
     console.warn(warningPrefix, `'${configPath}': ${sanitizedErrorMessage}`);
 
-    if (this.isValidationError(error)) {
+    if (isValidationError) {
       throw this.createValidationFailureError(error, configPath);
     }
 
-    logger.info('Using default configuration due to config file errors', logContext);
+    logger.info('Trying next configuration path or using defaults due to config file errors', logContext);
+    return null;
   }
 
   sanitizeErrorMessage(error) {
@@ -165,40 +179,155 @@ class ConfigManager {
     );
   }
 
-  /**
-   * Merge default config with loaded config, ensuring all required fields are present
-   * @param {Object} defaultConfig - Default configuration values
-   * @param {Object} loadedConfig - Configuration loaded from file
-   * @returns {Object} Merged configuration
-   */
-  mergeConfig(defaultConfig, loadedConfig) {
-    if (!loadedConfig) {
-      return { ...defaultConfig };
+  cloneConfig(config) {
+    return {
+      ...config,
+      resilience: {
+        ...config.resilience
+      }
+    };
+  }
+
+  mergeConfig(baseConfig, overrides) {
+    if (!overrides || typeof overrides !== 'object') {
+      return this.cloneConfig(baseConfig);
     }
 
-    const merged = { ...defaultConfig };
+    const merged = this.cloneConfig(baseConfig);
 
-    for (const [key, value] of Object.entries(loadedConfig)) {
-      if (!(key in defaultConfig)) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (!(key in baseConfig)) {
         continue;
       }
 
       if (key === 'resilience' && value && typeof value === 'object') {
         merged.resilience = {
-          ...defaultConfig.resilience,
+          ...merged.resilience,
           ...value
         };
         continue;
       }
 
-      merged[key] = value;
+      if (value !== undefined) {
+        merged[key] = value;
+      }
     }
 
-    merged.resilience = merged.resilience || { ...defaultConfig.resilience };
+    merged.resilience = merged.resilience || { ...baseConfig.resilience };
     merged.resilience.timeoutMs = merged.resilience.timeoutMs ?? merged.timeout;
     merged.resilience.maxRetries = merged.resilience.maxRetries ?? merged.maxRetries;
 
     return merged;
+  }
+
+  applyEnvironmentOverrides(config, logContext) {
+    const { overrides, appliedKeys } = this.getEnvironmentOverrides();
+    if (appliedKeys.length === 0) {
+      return config;
+    }
+
+    const mergedConfig = this.mergeConfig(config, overrides);
+    logger.info('Applied environment configuration overrides', {
+      ...logContext,
+      appliedEnvKeys: appliedKeys
+    });
+
+    return mergedConfig;
+  }
+
+  getEnvironmentOverrides() {
+    const overrides = {};
+    const resilienceOverrides = {};
+    const appliedKeys = [];
+
+    const assignString = (envKey, targetKey) => {
+      const value = process.env[envKey];
+      if (typeof value === 'string' && value.trim() !== '') {
+        overrides[targetKey] = value.trim();
+        appliedKeys.push(envKey);
+      }
+    };
+
+    const assignNumber = (envKey, targetKey, { integer = false } = {}) => {
+      const parsed = this.parseNumericEnv(envKey, { integer });
+      if (parsed === undefined) {
+        return;
+      }
+
+      if (targetKey.startsWith('resilience.')) {
+        const key = targetKey.split('.')[1];
+        resilienceOverrides[key] = parsed;
+      } else {
+        overrides[targetKey] = parsed;
+      }
+
+      appliedKeys.push(envKey);
+    };
+
+    assignString('ROUTERX_DEFAULT_MODEL', 'defaultModel');
+    assignString('ROUTERX_DEFAULT_BASE_URL', 'defaultBaseUrl');
+    assignString('ROUTERX_DEFAULT_SAVE_PATH', 'defaultSavePath');
+
+    assignNumber('ROUTERX_TIMEOUT', 'timeout', { integer: false });
+    assignNumber('ROUTERX_MAX_RETRIES', 'maxRetries', { integer: true });
+
+    assignNumber('ROUTERX_RESILIENCE_TIMEOUT_MS', 'resilience.timeoutMs', { integer: false });
+    assignNumber('ROUTERX_RESILIENCE_MAX_RETRIES', 'resilience.maxRetries', { integer: true });
+    assignNumber('ROUTERX_RESILIENCE_BASE_DELAY_MS', 'resilience.baseDelayMs', { integer: false });
+    assignNumber('ROUTERX_RESILIENCE_MAX_DELAY_MS', 'resilience.maxDelayMs', { integer: false });
+    assignNumber('ROUTERX_RESILIENCE_JITTER_MS', 'resilience.jitterMs', { integer: false });
+    assignNumber('ROUTERX_RESILIENCE_BREAKER_THRESHOLD', 'resilience.breakerThreshold', { integer: true });
+    assignNumber('ROUTERX_RESILIENCE_BREAKER_COOLDOWN_MS', 'resilience.breakerCooldownMs', { integer: false });
+    assignNumber('ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_SUCCESSES', 'resilience.breakerHalfOpenSuccesses', { integer: true });
+    assignNumber('ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_FAILURES', 'resilience.breakerHalfOpenFailures', { integer: true });
+
+    if (Object.keys(resilienceOverrides).length > 0) {
+      overrides.resilience = resilienceOverrides;
+    }
+
+    return { overrides, appliedKeys };
+  }
+
+  parseNumericEnv(envKey, { integer = false } = {}) {
+    if (!(envKey in process.env)) {
+      return undefined;
+    }
+
+    const rawValue = process.env[envKey];
+    if (rawValue === undefined || rawValue === null || rawValue === '') {
+      return undefined;
+    }
+
+    const parsed = integer ? Number.parseInt(rawValue, 10) : Number(rawValue);
+
+    if (!Number.isFinite(parsed)) {
+      logger.warn('Ignoring invalid numeric environment override', {
+        operation: 'loadConfig',
+        envKey,
+        rawValue
+      });
+      return undefined;
+    }
+
+    return parsed;
+  }
+
+  createValidationFailureError(error, configPath) {
+    const validationErrors = Array.isArray(error?.context?.errors) ? error.context.errors : [];
+    const details = validationErrors.length > 0
+      ? validationErrors.join(', ')
+      : (error?.message || 'Unknown validation error');
+
+    return createRouterXError(
+      `Configuration file '${configPath}' failed validation: ${details}`,
+      'CONFIG_VALIDATION_ERROR',
+      {
+        ...error?.context,
+        configPath,
+        originalMessage: error?.message
+      },
+      'config'
+    );
   }
 }
 
