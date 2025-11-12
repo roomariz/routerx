@@ -73,6 +73,43 @@ Options:
 - `--free`: Force only free model fallback
 - `--prefer <keyword>`: Bias model selection
 
+### Health Checks
+
+```bash
+routerx health
+```
+
+Runs dependency probes for:
+- API connectivity (primary `/health` endpoint with fallback)
+- API key validation (`OPENAI_API_KEY` or `OPENROUTER_API_KEY`)
+- Filesystem readiness for the configured output directory
+
+Sample output:
+```
+🩺 RouterX Runtime & Dependency Health
+Timestamp: 2024-01-01T00:00:00.000Z
+
+✅ API Health — HEALTHY
+   latency: 120ms
+   endpoint: /health
+
+✅ API Key — HEALTHY
+   API key detected in environment
+
+✅ Filesystem Readiness — HEALTHY
+   Output directory is accessible
+
+Overall status: HEALTHY
+```
+
+Use `--json` for machine-readable output (ideal for CI/CD or scripts):
+
+```bash
+routerx health --json | jq '.status'
+```
+
+The JSON schema includes `status`, `timestamp`, `environment`, `summary`, and an array of `checks[]` objects (`name`, `status`, `message`, `latencyMs`, `details`). The CLI exits with code `1` when the overall status is degraded or unhealthy so you can gate pipelines on dependency readiness.
+
 ## Examples
 
 ### Chat Commands

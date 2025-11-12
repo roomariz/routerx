@@ -14,10 +14,15 @@ jest.mock('../../src/commands/code/index.js', () => ({
   registerCodeCommand: jest.fn()
 }));
 
+jest.mock('../../src/commands/health/index.js', () => ({
+  registerHealthCommand: jest.fn()
+}));
+
 describe('RegisterCommands', () => {
   const { registerChatCommand } = require('../../src/commands/chat/index.js');
   const { registerModelsCommand } = require('../../src/commands/models/index.js');
   const { registerCodeCommand } = require('../../src/commands/code/index.js');
+  const { registerHealthCommand } = require('../../src/commands/health/index.js');
   const { registerCommands } = require('../../src/cli/registerCommands.js');
 
   beforeEach(() => {
@@ -33,6 +38,7 @@ describe('RegisterCommands', () => {
       expect(registerChatCommand).toHaveBeenCalledWith(mockProgram);
       expect(registerModelsCommand).toHaveBeenCalledWith(mockProgram);
       expect(registerCodeCommand).toHaveBeenCalledWith(mockProgram);
+      expect(registerHealthCommand).toHaveBeenCalledWith(mockProgram);
     });
 
     test('calls each registration function exactly once', () => {
@@ -43,6 +49,7 @@ describe('RegisterCommands', () => {
       expect(registerChatCommand).toHaveBeenCalledTimes(1);
       expect(registerModelsCommand).toHaveBeenCalledTimes(1);
       expect(registerCodeCommand).toHaveBeenCalledTimes(1);
+      expect(registerHealthCommand).toHaveBeenCalledTimes(1);
     });
 
     test('registers commands with different program objects correctly', () => {
@@ -55,8 +62,11 @@ describe('RegisterCommands', () => {
       expect(registerChatCommand).toHaveBeenCalledTimes(2);
       expect(registerModelsCommand).toHaveBeenCalledTimes(2);
       expect(registerCodeCommand).toHaveBeenCalledTimes(2);
+      expect(registerHealthCommand).toHaveBeenCalledTimes(2);
       expect(registerChatCommand).toHaveBeenCalledWith(mockProgram1);
       expect(registerChatCommand).toHaveBeenCalledWith(mockProgram2);
+      expect(registerHealthCommand).toHaveBeenCalledWith(mockProgram1);
+      expect(registerHealthCommand).toHaveBeenCalledWith(mockProgram2);
     });
   });
 });

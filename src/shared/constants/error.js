@@ -6,5 +6,6 @@ export const ERROR_MESSAGES = {
   MODEL_FETCH_ERROR: '❌ Failed to fetch model list',
   REQUEST_ERROR: '❌ Error processing request',
   NETWORK_ERROR: '❌ Network Error: Request failed to reach the server',
-  FILE_NOT_FOUND: '❌ File does not exist'
+  FILE_NOT_FOUND: '❌ File does not exist',
+  HEALTH_CHECK_FAILED: '❌ Health check failed'
 };
