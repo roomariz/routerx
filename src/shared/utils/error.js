@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { ERROR_MESSAGES } from '../constants/index.js';
 import { APIError, RouterXError, ConfigError, FileError, ValidationError } from './routerxError.js';
+import { metrics } from '../../monitoring/metrics.js';
 
 /**
  * Handle errors consistently with uniform console output
@@ -21,6 +22,11 @@ export function handleError(err, context = 'REQUEST_ERROR', additionalContext = 
   } else {
     console.error(message, err.message);
   }
+
+  metrics.incrementCounter('errors.handled_total', 1, {
+    context,
+    type: err?.code || err?.name || 'Error'
+  });
 }
 
 /**
@@ -56,6 +62,12 @@ export function handleAPIError(error, context = {}) {
     );
   }
   
+  metrics.incrementCounter('errors.api_total', 1, {
+    status: apiError?.context?.status,
+    context: context.operation || context.command || 'api',
+    category: apiError?.context?.type || 'api'
+  });
+
   return apiError;
 }
 

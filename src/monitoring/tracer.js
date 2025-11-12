@@ -1,4 +1,5 @@
 import { logger as baseLogger } from './logger.js';
+import { metrics } from './metrics.js';
 
 export class RequestTracer {
   static generateTraceId() {
@@ -33,6 +34,7 @@ export class RequestTracer {
       traceId,
       operation: operationName
     };
+    const metricLabels = { operation: operationName };
 
     const operationLogger = typeof targetLogger.child === 'function'
       ? targetLogger.child(traceMeta)
@@ -51,6 +53,11 @@ export class RequestTracer {
         ...traceMeta,
         duration: this.formatDuration(duration)
       });
+      metrics.recordLatency('tracer.operation.duration_ms', duration, {
+        ...metricLabels,
+        status: 'success'
+      });
+      metrics.incrementCounter('tracer.operation.success_total', 1, metricLabels);
       return result;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -58,6 +65,14 @@ export class RequestTracer {
         ...traceMeta,
         duration: this.formatDuration(duration),
         error: error?.message || error
+      });
+      metrics.recordLatency('tracer.operation.duration_ms', duration, {
+        ...metricLabels,
+        status: 'failure'
+      });
+      metrics.incrementCounter('tracer.operation.failure_total', 1, {
+        ...metricLabels,
+        error: error?.code || error?.name || 'error'
       });
       throw error;
     }

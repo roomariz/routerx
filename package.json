@@ -15,6 +15,7 @@
     "test:coverage": "npx jest --collectCoverageFrom=\"src/**/*.js\" --coverage --no-cache",
     "test:runner": "node test-runner.js",
     "benchmark": "node benchmark.js",
+    "ci:metrics": "node ./bin/routerx.js metrics --json --output ./artifacts/routerx-metrics.json",
     "ci:check": "npm run test:coverage && npm audit --audit-level moderate && npm run benchmark"
   },
   "keywords": [

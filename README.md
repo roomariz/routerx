@@ -110,6 +110,24 @@ routerx health --json | jq '.status'
 
 The JSON schema includes `status`, `timestamp`, `environment`, `summary`, and an array of `checks[]` objects (`name`, `status`, `message`, `latencyMs`, `details`). The CLI exits with code `1` when the overall status is degraded or unhealthy so you can gate pipelines on dependency readiness.
 
+### Metrics Snapshot
+
+```bash
+routerx metrics
+```
+
+Surfaces the in-process counters and latency histograms collected through `getMetricsSnapshot()`. Use `--json` to stream the raw snapshot, or combine `--json` with `--output <file>` to persist the metrics as a CI artifact. The snapshot includes every counter sample (with labels) plus histogram summaries with bucket counts and computed averages.
+
+For automated pipelines, use the provided helper:
+
+```bash
+npm run ci:metrics
+```
+
+This writes `./artifacts/routerx-metrics.json`, which can be uploaded by your CI system to make the metrics visible outside the process.
+
+Our GitHub Actions workflow now runs this helper on every push and pull request, then publishes the resulting `routerx-metrics.json` artifact so you can compare snapshots across runs. Once a baseline is established, add a follow-up step that parses the artifact and fails the build if high-risk counters or latency buckets exceed agreed limits.
+
 ## Examples
 
 ### Chat Commands

@@ -17,6 +17,7 @@ outputs/
 dist/
 build/
 out/
+artifacts/
 
 # Runtime data
 npm-debug.log*

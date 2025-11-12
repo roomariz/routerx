@@ -4,6 +4,7 @@ import { retryWithBackoff } from '../../resilience/retry.js';
 import { CircuitBreaker } from '../../resilience/circuitBreaker.js';
 import { createResiliencePolicy } from '../../resilience/policy.js';
 import { logger as defaultLogger } from '../../monitoring/logger.js';
+import { metrics } from '../../monitoring/metrics.js';
 import { handleAPIError, createRouterXError } from '../../shared/utils/error.js';
 import { RouterXError } from '../../shared/utils/routerxError.js';
 
@@ -42,6 +43,18 @@ class ApiClient {
       timestamp,
       context: change.context
     });
+
+    metrics.incrementCounter('resilience.breaker.state_change_total', 1, {
+      from: change.previousState,
+      to: change.currentState,
+      operation: change.context?.operation
+    });
+
+    if (change.currentState === 'OPEN') {
+      metrics.incrementCounter('resilience.breaker.open_total', 1, {
+        operation: change.context?.operation
+      });
+    }
   }
 
   async executeWithResilience(operation, meta = {}) {
@@ -79,12 +92,19 @@ class ApiClient {
     }
 
     const userOnRetry = finalRetryOptions.onRetry;
+    const metricLabels = { operation: operationName };
+    const startedAt = Date.now();
+
     finalRetryOptions.onRetry = async (info) => {
       this.logger?.warn?.('Retrying API operation', {
         operation: operationName,
         attempt: info.attempt,
         delay: info.delay,
         error: info.error?.message
+      });
+
+      metrics.incrementCounter('api.operation.retry_total', 1, {
+        operation: operationName
       });
 
       if (typeof userOnRetry === 'function') {
@@ -105,12 +125,20 @@ class ApiClient {
         { ...breakerContext, operation: operationName }
       );
 
+      const durationMs = Date.now() - startedAt;
       this.logger?.debug?.('API operation succeeded', {
         operation: operationName
       });
+      metrics.recordLatency('api.operation.duration_ms', durationMs, {
+        operation: operationName,
+        status: 'success'
+      });
+      metrics.incrementCounter('api.operation.success_total', 1, metricLabels);
 
       return result;
     } catch (error) {
+      const durationMs = Date.now() - startedAt;
+
       if (error.name === 'AbortError') {
         const timeoutError = createRouterXError(
           `Operation '${operationName}' timed out after ${timeoutMs}ms`,
@@ -124,12 +152,27 @@ class ApiClient {
           timeoutMs
         });
 
+         metrics.recordLatency('api.operation.duration_ms', durationMs, {
+           operation: operationName,
+           status: 'timeout'
+         });
+         metrics.incrementCounter('api.operation.timeout_total', 1, metricLabels);
+
         throw timeoutError;
       }
 
       this.logger?.warn?.('API operation failed', {
         operation: operationName,
         error: error.message
+      });
+
+      metrics.recordLatency('api.operation.duration_ms', durationMs, {
+        operation: operationName,
+        status: 'failure'
+      });
+      metrics.incrementCounter('api.operation.failure_total', 1, {
+        ...metricLabels,
+        error: error.code || error.name || 'error'
       });
 
       throw error;

@@ -4,6 +4,7 @@ import axios from 'axios';
 import pkg from '../../package.json' with { type: 'json' };
 import { validateApiKey } from '../shared/utils/auth.js';
 import { logger as defaultLogger } from './logger.js';
+import { metrics } from './metrics.js';
 
 const DEFAULT_HEALTH_ENDPOINT = '/health';
 const DEFAULT_FALLBACK_ENDPOINT = 'models?limit=1';
@@ -362,19 +363,35 @@ export class HealthChecker {
       }
     ];
 
-    const settled = await Promise.allSettled(checks.map((check) => check.runner()));
+    const normalized = [];
 
-    const normalized = settled.map((result, index) => {
-      if (result.status === 'fulfilled') {
-        return result.value;
+    for (const check of checks) {
+      const startedAt = Date.now();
+      let result;
+
+      try {
+        const value = await check.runner();
+        const latencyMs = Number.isFinite(value?.latencyMs) ? value.latencyMs : (Date.now() - startedAt);
+        result = { ...value, latencyMs };
+      } catch (error) {
+        result = this.buildCheckResult(check.name, STATUS.UNHEALTHY, {
+          message: 'Health check execution failed',
+          details: { error: error?.message || error || 'Unknown error' }
+        });
+        result.latencyMs = Date.now() - startedAt;
       }
 
-      const descriptor = checks[index];
-      return this.buildCheckResult(descriptor.name, STATUS.UNHEALTHY, {
-        message: 'Health check execution failed',
-        details: { error: result.reason?.message || result.reason || 'Unknown error' }
+      metrics.incrementCounter('health.check.total', 1, {
+        name: check.name,
+        status: result.status
       });
-    });
+      metrics.recordLatency('health.check.duration_ms', result.latencyMs, {
+        name: check.name,
+        status: result.status
+      });
+
+      normalized.push(result);
+    }
 
     return {
       status: this.evaluateOverallStatus(normalized),
