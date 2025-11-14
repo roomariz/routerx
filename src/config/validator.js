@@ -5,6 +5,7 @@ const isPositiveNumber = (value) => typeof value === 'number' && Number.isFinite
 const isNonNegativeNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 const isNonNegativeInteger = (value) => Number.isInteger(value) && value >= 0;
 const isPositiveInteger = (value) => Number.isInteger(value) && value > 0;
+const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 
 export class ConfigValidator {
   static validate(config) {
@@ -41,6 +42,14 @@ export class ConfigValidator {
         errors.push('features must be a configuration object');
       } else {
         this.validateFeatures(config.features, errors);
+      }
+    }
+
+    if (config.telemetry !== undefined) {
+      if (!config.telemetry || typeof config.telemetry !== 'object') {
+        errors.push('telemetry must be a configuration object');
+      } else {
+        this.validateTelemetry(config.telemetry, errors);
       }
     }
 
@@ -118,6 +127,22 @@ export class ConfigValidator {
 
       if (typeof value !== 'boolean') {
         errors.push(`features.${key} must be a boolean`);
+      }
+    }
+  }
+
+  static validateTelemetry(telemetry, errors) {
+    if (telemetry.referer !== undefined) {
+      if (!isNonEmptyString(telemetry.referer)) {
+        errors.push('telemetry.referer must be a non-empty string');
+      } else if (!this.isValidUrl(telemetry.referer)) {
+        errors.push('telemetry.referer must be a valid URL');
+      }
+    }
+
+    if (telemetry.title !== undefined) {
+      if (!isNonEmptyString(telemetry.title)) {
+        errors.push('telemetry.title must be a non-empty string');
       }
     }
   }

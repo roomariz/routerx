@@ -88,7 +88,7 @@ describe('Full CLI Integration Tests', () => {
       // The models command should work without an API key
       expect(code).toBe(0);
       // Should contain model data (not empty) or at least the fetching message
-      expect(output).toContain('📡 Fetching model list') || expect(output).toContain('Available Models');
+      expect(output).toMatch(/RouterX Models|Available Models|📡 Fetching model list/);
       done();
     });
   }, 15000);
@@ -179,7 +179,7 @@ describe('Full CLI Integration Tests', () => {
       // The models command should work without an API key
       expect(code).toBe(0);
       // Should contain model data (not empty) or at least the fetching message
-      expect(output).toContain('📡 Fetching model list') || expect(output).toContain('Available Models');
+      expect(output).toMatch(/RouterX Models|Available Models|📡 Fetching model list/);
       done();
     });
   }, 15000);
@@ -204,7 +204,7 @@ describe('Full CLI Integration Tests', () => {
       // The models command should work without an API key
       expect(code).toBe(0);
       // Should contain model data (not empty) or at least the fetching message
-      expect(output).toContain('📡 Fetching model list') || expect(output).toContain('Available Models');
+      expect(output).toMatch(/RouterX Models|Available Models|📡 Fetching model list/);
       done();
     });
   }, 15000);

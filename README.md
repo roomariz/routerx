@@ -10,6 +10,7 @@ A lightweight CLI for interacting with OpenRouter models and AI services. Provid
 - **Multiple Provider Support**: Works with OpenRouter and OpenAI APIs
 - **Streaming Responses**: Real-time output for faster feedback
 - **File Output**: Save AI responses directly to files
+- **Diagnostics**: Built-in `routerx doctor` and `routerx init` commands keep your workspace healthy
 - **Configurable Models**: Use your preferred AI model for tasks
 
 ## Installation
@@ -22,15 +23,21 @@ npm install -g routerx
 
 ## Prerequisites
 
-You'll need an API key from OpenRouter or OpenAI. Add it to your `.env` file:
+You'll need an API key from OpenRouter, OpenAI, or Google Gemini. Add it to your `.env` file:
 
 ```env
 OPENROUTER_API_KEY=your_api_key_here
 # or
 OPENAI_API_KEY=your_api_key_here
+# or
+GEMINI_API_KEY=your_api_key_here
 ```
 
+> **OpenRouter requirement:** Their API rejects chat requests unless it can identify your application via `HTTP-Referer` or `X-Title`. RouterX defaults to `https://routerx.sh` and `RouterX CLI`, but you must set `ROUTERX_HTTP_REFERER`/`ROUTERX_CLIENT_TITLE` (or the `telemetry` block in `config.json`) to match the App URL and App Name you registered with OpenRouter. Otherwise you'll see `API Error: 401 - User not found`.
+
 ## Usage
+
+Add `--verbose` to any command when you need structured JSON logs or extended details. Otherwise, RouterX keeps output focused on the task at hand.
 
 ### Chat with AI Models
 
@@ -52,6 +59,9 @@ routerx models
 Options:
 - `--free`: Show only free models
 - `--search <keyword>`: Filter models by keyword
+- `--vendor <name>`: Filter by organization prefix (`openai`, `mistralai`, etc.)
+- `--limit <n>`: Limit the number of rows (default: 50)
+- `--json`: Output filtered models as JSON for scripts
 
 ### Code Assistant
 
@@ -83,25 +93,24 @@ routerx health
 
 Runs dependency probes for:
 - API connectivity (primary `/health` endpoint with fallback)
-- API key validation (`OPENAI_API_KEY` or `OPENROUTER_API_KEY`)
+- API key validation (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or `GEMINI_API_KEY`)
 - Filesystem readiness for the configured output directory
 
 Sample output:
 ```
-🩺 RouterX Runtime & Dependency Health
-Timestamp: 2024-01-01T00:00:00.000Z
+🩺 RouterX Health — ✅ HEALTHY
+──────────────────────────────
+✅ API Health (120ms)
+  Primary /health endpoint responded
 
-✅ API Health — HEALTHY
-   latency: 120ms
-   endpoint: /health
+✅ API Key
+  Detected OPENROUTER_API_KEY
 
-✅ API Key — HEALTHY
-   API key detected in environment
+✅ Filesystem Readiness
+  Output directory is accessible
 
-✅ Filesystem Readiness — HEALTHY
-   Output directory is accessible
-
-Overall status: HEALTHY
+Overall Status: ✅ HEALTHY
+Tip: Run `routerx doctor` for full diagnostics
 ```
 
 Use `--json` for machine-readable output (ideal for CI/CD or scripts):
@@ -111,6 +120,53 @@ routerx health --json | jq '.status'
 ```
 
 The JSON schema includes `status`, `timestamp`, `environment`, `summary`, and an array of `checks[]` objects (`name`, `status`, `message`, `latencyMs`, `details`). The CLI exits with code `1` when the overall status is degraded or unhealthy so you can gate pipelines on dependency readiness.
+
+### Doctor (Full Diagnostics)
+
+```bash
+routerx doctor
+```
+
+Runs the health checks plus configuration and environment audits so you can spot missing folders, config overrides, or API key issues in one command. Use `--json` to integrate with CI pipelines.
+
+Sample output:
+```
+🩺 RouterX Doctor — ❌ UNHEALTHY
+───────────────────────────────
+Health Checks
+  ❌ Filesystem Readiness — Missing D:\workspace\routerx\outputs
+    ➤ Run "routerx init" to provision folders
+
+Configuration
+  ✅ Default Model — openai/gpt-4o-mini
+  ❌ Output Directory — Missing D:\workspace\routerx\outputs
+    ➤ Run "routerx init" to create D:\workspace\routerx\outputs
+
+Environment
+  ⚠️ API Key — Missing
+    ➤ Set OPENAI_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY
+  ✅ Node.js — v20.12.0
+
+Tip: Use `routerx init` and rerun `routerx doctor` after applying fixes
+```
+
+### Initialize Workspace
+
+```bash
+routerx init
+```
+
+Creates the default `outputs/` directory plus the `.routerx-cache/` folder used for cached API responses. Use `--output <dir>` if you want to override the save path during project bootstrapping.
+
+Sample output:
+```
+🛠 RouterX Init
+───────────────────────────────
+✅ Created Outputs: D:\workspace\routerx\outputs
+🟢 Ready Cache: D:\workspace\routerx\.routerx-cache
+
+Tip: You can override the output path via --output <dir>
+```
 
 ### Metrics Snapshot
 
@@ -312,18 +368,18 @@ routerx models
 
 Sample output:
 ```
-📡 Fetching model list...
-
-🧠 Available Models:
-
-• openai/gpt-4o                     | Paid
-• openai/gpt-4o-mini                | Paid
-• anthropic/claude-3.5-sonnet       | Paid
-• google/gemini-pro-1.5             | Paid
-• mistralai/mistral-7b-instruct     | Paid
-• openchat/openchat-7b              | Free
-• pygmalionai/mythalion-13b         | Free
-• huggingfaceh4/zephyr-7b-beta      | Free
+🧠 RouterX Models — 6 results
+────────────────────────────────────────────
+Model                                   │ Access │ Status
+────────────────────────────────────────┼────────┼────────────
+openai/gpt-4o                           │ 🟡 Paid │ Available
+openai/gpt-4o-mini                      │ 🟡 Paid │ Available
+anthropic/claude-3.5-sonnet             │ 🟡 Paid │ Available
+google/gemini-pro-1.5                   │ 🟡 Paid │ Available
+openchat/openchat-7b                    │ 🟢 Free │ Available
+pygmalionai/mythalion-13b               │ 🟢 Free │ Available
+────────────────────────────────────────┼────────┼────────────
+Tip: Use `routerx models --search openai` or `routerx models --json`
 ```
 
 Search for specific models:
@@ -333,14 +389,16 @@ routerx models --search "gpt-4"
 
 Sample output:
 ```
-📡 Fetching model list...
-
-🧠 Available Models matching 'gpt-4':
-
-• openai/gpt-4o                     | Paid
-• openai/gpt-4o-mini                | Paid
-• openai/gpt-4-turbo                | Paid
-• openai/gpt-4                      | Paid
+🧠 RouterX Models (Search: "gpt-4") — 4 results
+────────────────────────────────────────────
+Model                                   │ Access │ Status
+────────────────────────────────────────┼────────┼────────────
+openai/gpt-4o                           │ 🟡 Paid │ Available
+openai/gpt-4o-mini                      │ 🟡 Paid │ Available
+openai/gpt-4-turbo                      │ 🟡 Paid │ Available
+openai/gpt-4                            │ 🟡 Paid │ Available
+────────────────────────────────────────┼────────┼────────────
+Tip: Use `--vendor openai` to scope results
 ```
 
 List only free models:
@@ -350,15 +408,17 @@ routerx models --free
 
 Sample output:
 ```
-📡 Fetching model list...
-
-🧠 Available Models Free:
-
-• openchat/openchat-7b              | Free
-• pygmalionai/mythalion-13b         | Free
-• huggingfaceh4/zephyr-7b-beta      | Free
-• cognitivecomputations/dolphin-mixtral-8x7b  | Free
-• databricks/dbrx-instruct          | Free
+🧠 RouterX Models (Free) — 5 results
+────────────────────────────────────────────
+Model                                   │ Access │ Status
+────────────────────────────────────────┼────────┼────────────
+openchat/openchat-7b                    │ 🟢 Free │ Available
+pygmalionai/mythalion-13b               │ 🟢 Free │ Available
+huggingfaceh4/zephyr-7b-beta            │ 🟢 Free │ Available
+cognitivecomputations/dolphin-mixtral   │ 🟢 Free │ Available
+databricks/dbrx-instruct                │ 🟢 Free │ Available
+────────────────────────────────────────┼────────┼────────────
+Tip: Use `--limit 20` to see more rows
 ```
 
 ## Configuration
@@ -372,9 +432,10 @@ Create a `.env` file in your project root or home directory:
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENAI_API_KEY=your_openai_api_key
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
-RouterX will use `OPENROUTER_API_KEY` if available, otherwise it falls back to `OPENAI_API_KEY`.
+RouterX checks for `OPENAI_API_KEY`, then `OPENROUTER_API_KEY`, then `GEMINI_API_KEY` and uses the first available key.
 
 ### Configuration File
 
@@ -386,7 +447,11 @@ RouterX supports a JSON configuration file to set default values. Create a `conf
   "defaultBaseUrl": "https://openrouter.ai/api/v1",
   "defaultSavePath": "./outputs",
   "maxRetries": 3,
-  "timeout": 30000
+  "timeout": 30000,
+  "telemetry": {
+    "referer": "https://your-app-domain.example.com",
+    "title": "Your App Name"
+  }
 }
 ```
 
@@ -416,6 +481,8 @@ Every configuration file must provide valid values for the following keys:
 - `resilience.breakerThreshold`: Positive integer that opens the circuit breaker after repeated failures.
 - `resilience.breakerCooldownMs`: Positive number that determines how long the breaker waits before transitioning to half-open.
 - `resilience.breakerHalfOpenSuccesses` / `resilience.breakerHalfOpenFailures`: Positive integers controlling how many attempts are required to close or reopen the breaker while half-open.
+- `telemetry.referer`: Valid HTTPS URL that matches the App URL registered with your OpenRouter API key.
+- `telemetry.title`: Non-empty string that identifies your application to OpenRouter.
 
 The bundled [`config.example.json`](./config.example.json) documents these requirements in the `_requiredFields` helper block—those `_` keys are informational and may be removed once you understand the constraints. When a validation error occurs you'll see output similar to:
 
@@ -449,6 +516,8 @@ Use environment variables to override individual configuration values without ed
 | `ROUTERX_RESILIENCE_BREAKER_COOLDOWN_MS` | Overrides `resilience.breakerCooldownMs`. |
 | `ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_SUCCESSES` | Overrides `resilience.breakerHalfOpenSuccesses`. |
 | `ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_FAILURES` | Overrides `resilience.breakerHalfOpenFailures`. |
+| `ROUTERX_HTTP_REFERER` | Overrides `telemetry.referer` (must match your OpenRouter App URL). |
+| `ROUTERX_CLIENT_TITLE` | Overrides `telemetry.title`. |
 
 Example:
 
@@ -461,6 +530,7 @@ export ROUTERX_TIMEOUT=45000
 ## Troubleshooting
 
 - **API Key Issues**: Ensure your API keys are properly set in the environment
+- **OpenRouter 401 "User not found"**: Set `ROUTERX_HTTP_REFERER` / `ROUTERX_CLIENT_TITLE` (or update `telemetry` in `config.json`) so they match the App URL and App Name configured on openrouter.ai, and confirm that you're using a valid OpenRouter API key.
 - **Model Not Found**: Check that the model ID exists in the available models list
 - **Rate Limiting**: If you encounter rate limit errors, try using different models or wait before retrying
 

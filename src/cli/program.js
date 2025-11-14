@@ -13,7 +13,9 @@ export function createProgram() {
   program
     .name('routerx')
     .description('A lightweight CLI for interacting with OpenRouter models')
-    .version('1.0.0');
+    .version('1.0.0')
+    .option('--verbose', 'Show verbose logs and diagnostics (JSON output)')
+    .showHelpAfterError();
 
   return program;
 }

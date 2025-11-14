@@ -12,9 +12,12 @@ export function registerModelsCommand(program) {
 
   program
     .command('models')
-    .description('List available models (free, paid, or filtered by search keyword)')
+    .description('Browse RouterX models with filtering, pricing tiers, and quick summaries')
     .option('--free', 'Show only free models')
     .option('--search <keyword>', 'Filter models by keyword (e.g. mistral, vision, llama)')
+    .option('--vendor <name>', 'Filter by organization prefix (openai, mistralai, deepseek, etc.)')
+    .option('--limit <n>', 'Limit number of rows (default: 50)')
+    .option('--json', 'Output filtered models as JSON (no formatting)')
     .option('--timeout <ms>', `Override request timeout in milliseconds (default: ${config.resilience.timeoutMs})`)
     .option('--max-retries <count>', `Override maximum retry attempts (default: ${config.resilience.maxRetries})`)
     .option('--retry-base-delay <ms>', `Override initial retry backoff delay in milliseconds (default: ${config.resilience.baseDelayMs})`)

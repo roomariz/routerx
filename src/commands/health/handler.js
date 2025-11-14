@@ -2,54 +2,13 @@ import { getRuntimeConfig } from '../../infrastructure/config/runtimeConfig.js';
 import { HealthChecker, healthCheckerStatus } from '../../monitoring/health.js';
 import { logger as baseLogger } from '../../monitoring/logger.js';
 import { handleError } from '../../shared/utils/error.js';
-
-const STATUS_ICONS = {
-  healthy: '✅',
-  degraded: '⚠️',
-  unhealthy: '❌'
-};
+import { sectionTitle, divider, tipLine } from '../../cli/ui/layout.js';
+import { formatStatusBadge, palette } from '../../cli/ui/theme.js';
+import { isVerboseMode } from '../../cli/state/session.js';
 
 function parseTimeout(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function formatHealthReport(report) {
-  const lines = [
-    '🩺 RouterX Runtime & Dependency Health',
-    `Timestamp: ${report.timestamp}`
-  ];
-
-  for (const check of report.checks) {
-    const icon = STATUS_ICONS[check.status] || '❔';
-    lines.push('');
-    lines.push(`${icon} ${check.name} — ${check.status.toUpperCase()}`);
-
-    if (typeof check.latencyMs === 'number') {
-      lines.push(`   latency: ${check.latencyMs}ms`);
-    }
-
-    if (check.message) {
-      lines.push(`   ${check.message}`);
-    }
-
-    const endpoint = check.details?.endpoint || check.details?.fallbackEndpoint;
-    if (endpoint) {
-      lines.push(`   endpoint: ${endpoint}`);
-    }
-
-    if (check.details?.statusCode) {
-      lines.push(`   status: ${check.details.statusCode}`);
-    }
-
-    if (check.details?.error) {
-      lines.push(`   error: ${check.details.error}`);
-    }
-  }
-
-  lines.push('');
-  lines.push(`Overall status: ${report.status.toUpperCase()}`);
-  return lines.join('\n');
 }
 
 /**
@@ -79,7 +38,7 @@ export async function handleHealthCommand(options = {}, context = {}) {
     if (options.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
-      console.log(formatHealthReport(report));
+      renderHealthReport(report, { verbose: isVerboseMode() });
     }
 
     commandLogger.info('Health checks completed', {
@@ -103,4 +62,80 @@ export async function handleHealthCommand(options = {}, context = {}) {
     process.exitCode = 1;
     return null;
   }
+}
+
+function renderHealthReport(report = {}, { verbose = false } = {}) {
+  const overallStatus = (report.status || 'info').toLowerCase();
+  const statusBadge = formatStatusBadge(overallStatus, overallStatus.toUpperCase());
+  console.log(sectionTitle(`🩺 RouterX Health — ${statusBadge}`));
+  console.log(divider());
+
+  (Array.isArray(report.checks) ? report.checks : []).forEach((check) => {
+    const checkBadge = formatStatusBadge(check.status, check.status.toUpperCase());
+    const latency = Number.isFinite(check.latencyMs) ? palette.muted(`(${check.latencyMs}ms)`) : '';
+    console.log(`${checkBadge} ${check.name}${latency ? ` ${latency}` : ''}`);
+
+    if (check.message) {
+      console.log(`  ${check.message}`);
+    }
+
+    if (verbose && check.details) {
+      Object.entries(check.details).forEach(([key, value]) => {
+        if (value === undefined || value === null) {
+          return;
+        }
+        console.log(palette.muted(`    ${key}: ${value}`));
+      });
+    }
+
+    const suggestions = buildRecommendations(check);
+    if (suggestions.length > 0) {
+      suggestions.forEach((suggestion) => console.log(`  ➤ ${suggestion}`));
+    }
+
+    console.log('');
+  });
+
+  console.log(`Overall Status: ${statusBadge}`);
+  console.log('');
+  console.log(tipLine('Run `routerx doctor` for config and environment diagnostics'));
+  console.log('');
+}
+
+function buildRecommendations(check) {
+  if (check.status === healthCheckerStatus.HEALTHY) {
+    return [];
+  }
+
+  if (check.name === 'Filesystem Readiness') {
+    const path = check.details?.path;
+    const errorMessage = (check.details?.error || '').toString();
+    if (check.details?.missing || errorMessage.includes('ENOENT')) {
+      return [
+        `Missing directory: ${path}`,
+        `Run "routerx init" or mkdir "${path}"`
+      ];
+    }
+    return path ? [`Verify read/write permissions for ${path}`] : ['Verify output directory permissions'];
+  }
+
+  if (check.name === 'API Key') {
+    return [
+      'Set OPENAI_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY',
+      'Run `routerx doctor` to re-check environment'
+    ];
+  }
+
+  if (check.name === 'API Health') {
+    const endpoint = check.details?.endpoint || check.details?.fallbackEndpoint || 'health endpoint';
+    if (check.details?.statusCode === 401) {
+      return ['API key rejected. Generate a new key and export it again.'];
+    }
+    return [
+      `Endpoint unreachable: ${endpoint}`,
+      'Check network connectivity or override --base-url'
+    ];
+  }
+
+  return [];
 }

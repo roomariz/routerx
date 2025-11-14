@@ -59,7 +59,9 @@ describe('health command handler', () => {
     const report = await handleHealthCommand({});
 
     expect(report.status).toBe(healthCheckerStatus.HEALTHY);
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Overall status: HEALTHY'));
+    const lines = console.log.mock.calls.map(([line]) => line);
+    expect(lines.some((line) => typeof line === 'string' && line.includes('RouterX Health'))).toBe(true);
+    expect(lines.some((line) => typeof line === 'string' && line.includes('Overall Status'))).toBe(true);
     expect(process.exitCode).toBeUndefined();
     expect(HealthChecker).toHaveBeenCalledTimes(1);
   });

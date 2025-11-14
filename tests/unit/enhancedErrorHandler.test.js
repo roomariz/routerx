@@ -39,6 +39,19 @@ describe('Enhanced ErrorHandler', () => {
         expect.stringContaining(JSON.stringify(mockError.toJSON()))
       );
     });
+
+    test('serializes circular references without throwing', () => {
+      const circular = {};
+      circular.self = circular;
+      const mockError = new RouterXError('Circular error', 'CIRCULAR_ERROR', { circular });
+
+      expect(() => handleError(mockError, 'REQUEST_ERROR')).not.toThrow();
+      const structuredLog = console.error.mock.calls
+        .map(call => call[0])
+        .find(arg => typeof arg === 'string' && arg.includes('CIRCULAR_ERROR'));
+
+      expect(structuredLog).toContain('[Circular]');
+    });
   });
 
   describe('handleAPIError with enhanced context', () => {

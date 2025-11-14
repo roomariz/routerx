@@ -48,6 +48,8 @@
   },
   "files": [
     "index.js",
+    "bin/",
+    "src/",
     "README.md",
     "package.json",
     "LICENSE",

@@ -3,6 +3,37 @@ import { ERROR_MESSAGES } from '../constants/index.js';
 import { APIError, RouterXError, ConfigError, FileError, ValidationError } from './routerxError.js';
 import { metrics } from '../../monitoring/metrics.js';
 import { successMetrics } from '../../monitoring/successMetrics.js';
+import util from 'node:util';
+
+function safeStringify(value) {
+  const seen = new WeakSet();
+  try {
+    return JSON.stringify(
+      value,
+      (key, val) => {
+        if (typeof val === 'object' && val !== null) {
+          if (seen.has(val)) {
+            return '[Circular]';
+          }
+          seen.add(val);
+          if (val instanceof Error) {
+            return {
+              name: val.name,
+              message: val.message,
+              stack: val.stack
+            };
+          }
+        }
+        if (typeof val === 'function') {
+          return `[Function ${val.name || 'anonymous'}]`;
+        }
+        return val;
+      }
+    );
+  } catch {
+    return util.inspect(value, { depth: 3, maxArrayLength: 10 });
+  }
+}
 
 /**
  * Handle errors consistently with uniform console output
@@ -17,9 +48,9 @@ export function handleError(err, context = 'REQUEST_ERROR', additionalContext = 
   if (err instanceof RouterXError) {
     err.context = { ...err.context, ...additionalContext };
     console.error(message, err.message);
-    
+
     // Log structured error for monitoring systems
-    console.error(JSON.stringify(err.toJSON()));
+    console.error(safeStringify(err.toJSON()));
   } else {
     console.error(message, err.message);
   }

@@ -10,7 +10,8 @@ const baseConfig = {
 
 const originalEnv = {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY
+  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY
 };
 
 function restoreEnv(key) {
@@ -24,6 +25,7 @@ function restoreEnv(key) {
 afterEach(() => {
   restoreEnv('OPENAI_API_KEY');
   restoreEnv('OPENROUTER_API_KEY');
+  restoreEnv('GEMINI_API_KEY');
 });
 
 describe('HealthChecker', () => {
@@ -59,6 +61,7 @@ describe('HealthChecker', () => {
   test('API key check reports healthy when key is present', async () => {
     process.env.OPENAI_API_KEY = 'test-key';
     delete process.env.OPENROUTER_API_KEY;
+    delete process.env.GEMINI_API_KEY;
 
     const checker = new HealthChecker(baseConfig);
     const result = await checker.checkApiKeyAvailability();
@@ -67,9 +70,23 @@ describe('HealthChecker', () => {
     expect(result.details.detectedSource).toBe('OPENAI_API_KEY');
   });
 
+  test('API key check detects GEMINI_API_KEY when it is the only key set', async () => {
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    process.env.GEMINI_API_KEY = 'gm-test';
+
+    const checker = new HealthChecker(baseConfig);
+    const result = await checker.checkApiKeyAvailability();
+
+    expect(result.status).toBe(healthCheckerStatus.HEALTHY);
+    expect(result.details.detectedSource).toBe('GEMINI_API_KEY');
+    expect(result.details.sourcesChecked).toEqual(['OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY']);
+  });
+
   test('API key check reports unhealthy when keys are missing', async () => {
     delete process.env.OPENAI_API_KEY;
     delete process.env.OPENROUTER_API_KEY;
+    delete process.env.GEMINI_API_KEY;
 
     const checker = new HealthChecker(baseConfig);
     const result = await checker.checkApiKeyAvailability();
@@ -82,7 +99,8 @@ describe('HealthChecker', () => {
     const fsStub = {
       promises: {
         stat: jest.fn().mockResolvedValue({ isDirectory: () => true }),
-        access: jest.fn().mockResolvedValue()
+        access: jest.fn().mockResolvedValue(),
+        mkdir: jest.fn()
       },
       constants: { R_OK: 4, W_OK: 2 }
     };
@@ -96,10 +114,12 @@ describe('HealthChecker', () => {
   });
 
   test('filesystem readiness reports unhealthy when directory is unavailable', async () => {
+    const missingError = new Error('missing directory');
     const fsStub = {
       promises: {
-        stat: jest.fn().mockRejectedValue(new Error('missing directory')),
-        access: jest.fn()
+        stat: jest.fn().mockRejectedValue(missingError),
+        access: jest.fn(),
+        mkdir: jest.fn()
       },
       constants: { R_OK: 4, W_OK: 2 }
     };
@@ -116,7 +136,8 @@ describe('HealthChecker', () => {
     const fsStub = {
       promises: {
         stat: jest.fn().mockResolvedValue({ isDirectory: () => true }),
-        access: jest.fn().mockResolvedValue()
+        access: jest.fn().mockResolvedValue(),
+        mkdir: jest.fn()
       },
       constants: { R_OK: 4, W_OK: 2 }
     };
@@ -130,5 +151,24 @@ describe('HealthChecker', () => {
     expect(statusesByName['API Health']).toBe(healthCheckerStatus.UNHEALTHY);
     expect(statusesByName['API Key']).toBe(healthCheckerStatus.HEALTHY);
     expect(statusesByName['Filesystem Readiness']).toBe(healthCheckerStatus.HEALTHY);
+  });
+  test('filesystem readiness surfaces missing directories without creating them', async () => {
+    const enoentError = new Error('missing directory');
+    enoentError.code = 'ENOENT';
+    const fsStub = {
+      promises: {
+        stat: jest.fn().mockRejectedValue(enoentError),
+        access: jest.fn(),
+        mkdir: jest.fn()
+      },
+      constants: { R_OK: 4, W_OK: 2 }
+    };
+
+    const checker = new HealthChecker(baseConfig, { fs: fsStub });
+    const result = await checker.checkFilesystemReadiness({ path: './outputs' });
+
+    expect(result.status).toBe(healthCheckerStatus.UNHEALTHY);
+    expect(result.details.missing).toBe(true);
+    expect(fsStub.promises.mkdir).not.toHaveBeenCalled();
   });
 });

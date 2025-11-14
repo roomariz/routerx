@@ -96,7 +96,7 @@ describe('CLI Integration Tests', () => {
     child.on('close', (code) => {
       // The models command should work without an API key
       expect(code).toBe(0);
-      expect(output).toContain('Available Models') || expect(output).toContain('📡 Fetching model list');
+      expect(output).toMatch(/RouterX Models|Available Models|📡 Fetching model list/);
       done();
     });
   }, 10000);

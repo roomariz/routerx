@@ -49,6 +49,8 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our com
    OPENROUTER_API_KEY=your_api_key_here
    # or
    OPENAI_API_KEY=your_api_key_here
+   # or
+   GEMINI_API_KEY=your_api_key_here
    ```
 
 4. Test your changes locally:

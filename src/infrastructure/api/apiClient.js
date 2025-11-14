@@ -18,6 +18,7 @@ class ApiClient {
     this.config = config;
     this.logger = options.logger || defaultLogger;
     this.policy = options.resiliencePolicy || createResiliencePolicy(config, options.resilienceOverrides);
+    this.identityHeaders = this.createIdentityHeaders(config);
 
     this.axiosInstance = axios.create({
       timeout: this.policy.getTimeoutMs(),
@@ -31,6 +32,34 @@ class ApiClient {
       logger: this.logger,
       onStateChange: (change) => this.handleBreakerStateChange(change)
     });
+  }
+
+  createIdentityHeaders(config = {}) {
+    const referer = process.env.ROUTERX_HTTP_REFERER
+      || config?.telemetry?.referer
+      || 'https://routerx.sh';
+    const title = process.env.ROUTERX_CLIENT_TITLE
+      || config?.telemetry?.title
+      || 'RouterX CLI';
+
+    const headers = {};
+
+    if (referer) {
+      headers['HTTP-Referer'] = referer;
+    }
+
+    if (title) {
+      headers['X-Title'] = title;
+    }
+
+    return headers;
+  }
+
+  withIdentityHeaders(additionalHeaders = {}) {
+    return {
+      ...this.identityHeaders,
+      ...additionalHeaders
+    };
   }
 
   handleBreakerStateChange(change) {
@@ -309,10 +338,10 @@ class ApiClient {
             messages: [{ role: 'user', content: prompt }],
           },
           responseType: 'stream',
-          headers: {
+          headers: this.withIdentityHeaders({
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
-          },
+          }),
           signal,
           timeout: timeoutMs
         }),
@@ -346,7 +375,8 @@ class ApiClient {
       return await this.executeWithResilience(
         ({ signal, timeoutMs }) => this.axiosInstance.get(`${baseUrl}/models`, {
           signal,
-          timeout: timeoutMs
+          timeout: timeoutMs,
+          headers: this.withIdentityHeaders()
         }),
         {
           operationName: 'fetchModels',
@@ -383,10 +413,10 @@ class ApiClient {
           `${baseUrl}/chat/completions`,
           { model, messages: [{ role: 'user', content: prompt }] },
           {
-            headers: {
+            headers: this.withIdentityHeaders({
               Authorization: `Bearer ${apiKey}`,
               'Content-Type': 'application/json',
-            },
+            }),
             signal,
             timeout: timeoutMs
           }

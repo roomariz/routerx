@@ -1,18 +1,23 @@
-// tests/unit/models.test.js 
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import { Command } from 'commander';
 import { jest } from '@jest/globals';
 
-// Mock dependencies BEFORE importing the module under test
-jest.mock('chalk', () => ({
-  yellow: jest.fn((str) => str),
-  green: jest.fn((str) => str)
-}));
+jest.mock('chalk', () => {
+  const passthrough = (value) => value;
+  passthrough.bold = passthrough;
+  passthrough.yellow = passthrough;
+  passthrough.green = passthrough;
+  passthrough.red = passthrough;
+  passthrough.white = passthrough;
+  passthrough.blue = passthrough;
+  passthrough.cyan = passthrough;
+  passthrough.gray = passthrough;
+  passthrough.dim = passthrough;
+  passthrough.hex = () => passthrough;
+  return passthrough;
+});
 
-// Create a mock instance for the API client
 const mockFetchModels = jest.fn();
-
-// Mock the API client constructor
 const MockApiClientConstructor = jest.fn(() => ({
   fetchModels: mockFetchModels
 }));
@@ -49,10 +54,6 @@ jest.mock('../../src/shared/constants/index.js', () => ({
     MODEL_FETCH_ERROR: '❌ Failed to fetch model list',
     MISSING_API_KEY: '❌ Missing API key',
     NO_MODELS_FOUND: 'No models found'
-  },
-  LOG_MESSAGES: {
-    FETCHING_MODELS: 'Fetching models...',
-    AVAILABLE_MODELS: 'Available models'
   }
 }));
 
@@ -64,207 +65,221 @@ jest.mock('../../src/shared/utils/error.js', () => ({
   handleError: jest.fn()
 }));
 
-// Import after mocking
+jest.mock('../../src/shared/utils/cache.js', () => ({
+  readJsonCache: jest.fn(() => null),
+  writeJsonCache: jest.fn()
+}));
+
 const { registerModelsCommand, handleModelsCommand, filterModels } = require('../../src/commands/models/index.js');
+const { validateApiKey } = require('../../src/shared/utils/auth.js');
+const { handleError } = require('../../src/shared/utils/error.js');
+const { readJsonCache, writeJsonCache } = require('../../src/shared/utils/cache.js');
 
 describe('Models Command', () => {
   let mockProgram;
-  const { validateApiKey } = require('../../src/shared/utils/auth.js');
-  const { handleError } = require('../../src/shared/utils/error.js');
-
-  // Save original console and process
   const originalConsole = { ...console };
 
   beforeEach(() => {
     mockProgram = new Command();
     jest.clearAllMocks();
+    readJsonCache.mockReturnValue(null);
+    writeJsonCache.mockClear();
 
-    // Mock console methods to avoid actual logging during tests
     console.log = jest.fn();
     console.error = jest.fn();
   });
 
   afterEach(() => {
-    // Restore original console methods
     console.log = originalConsole.log;
     console.error = originalConsole.error;
   });
 
   describe('registerModelsCommand', () => {
-    test('registers the models command with correct configuration', () => {
+    test('registers the models command with new flags', () => {
       registerModelsCommand(mockProgram);
-
-      const command = mockProgram.commands.find(cmd => cmd.name() === 'models');
-
+      const command = mockProgram.commands.find((cmd) => cmd.name() === 'models');
       expect(command).toBeDefined();
-      expect(command.name()).toBe('models');
-      expect(command.description()).toBe('List available models (free, paid, or filtered by search keyword)');
+      expect(command.description()).toContain('Browse RouterX models');
 
-      // Check options
-      const options = command.options;
-      expect(options.some(opt => opt.flags.includes('--free'))).toBe(true);
-      expect(options.some(opt => opt.flags.includes('--search'))).toBe(true);
+      const options = command.options.map((opt) => opt.flags);
+      expect(options.some((flags) => flags.includes('--free'))).toBe(true);
+      expect(options.some((flags) => flags.includes('--search'))).toBe(true);
+      expect(options.some((flags) => flags.includes('--vendor'))).toBe(true);
+      expect(options.some((flags) => flags.includes('--limit'))).toBe(true);
+      expect(options.some((flags) => flags.includes('--json'))).toBe(true);
     });
   });
 
-  describe('modelsAction', () => {
-    let modelsAction;
+  describe('handleModelsCommand', () => {
+    const modelsAction = handleModelsCommand;
 
-    beforeEach(() => {
-      // Use the exported handler function directly
-      modelsAction = handleModelsCommand;
-    });
-
-    test('fetches and displays models when successful', async () => {
-      const mockApiKey = 'test-api-key';
-      validateApiKey.mockReturnValue(mockApiKey);
-
-      const mockResponse = {
+    test('fetches, caches, and prints models', async () => {
+      validateApiKey.mockReturnValue('key');
+      mockFetchModels.mockResolvedValue({
         data: {
           data: [
             { id: 'model1', pricing: { prompt: 0 } },
-            { id: 'model2-free', pricing: { prompt: 0.5 } },
-            { id: 'model3', pricing: { prompt: 1 } }
+            { id: 'model2', pricing: { prompt: 0.25 } }
           ]
         }
-      };
-
-      mockFetchModels.mockResolvedValue(mockResponse);
+      });
 
       await modelsAction({});
 
-      // Verify API was called
       expect(mockFetchModels).toHaveBeenCalledWith('https://test-api.com');
+      expect(writeJsonCache).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+        models: expect.any(Array)
+      }));
 
-      // Check that models were displayed (logging occurred)
-      expect(console.log).toHaveBeenCalledWith('\nAvailable models:\n');
-      const loggedModelEntry = console.log.mock.calls.find(call => 
-        call[0] && call[0].includes('model1') && call[0].includes('| Free')
-      );
-      expect(loggedModelEntry).toBeDefined();
+      const headerLine = console.log.mock.calls
+        .map(([line]) => line)
+        .find((line) => typeof line === 'string' && line.includes('RouterX Models'));
+      expect(headerLine).toBeDefined();
     });
 
-    test('filters models by free option when provided', async () => {
-      const mockApiKey = 'test-api-key';
-      validateApiKey.mockReturnValue(mockApiKey);
-
-      const mockResponse = {
+    test('filters by free flag and annotates header', async () => {
+      validateApiKey.mockReturnValue('key');
+      mockFetchModels.mockResolvedValue({
         data: {
           data: [
             { id: 'free-model:free', pricing: { prompt: 0 } },
-            { id: 'paid-model', pricing: { prompt: 1 } },
-            { id: 'another-free-model-free', pricing: { prompt: 0 } }
-          ]
-        }
-      };
-
-      mockFetchModels.mockResolvedValue(mockResponse);
-
-      await modelsAction({ free: true });
-
-      // Check that only free models were displayed
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Available models Free:')
-      );
-    });
-
-    test('filters models by search keyword when provided', async () => {
-      const mockApiKey = 'test-api-key';
-      validateApiKey.mockReturnValue(mockApiKey);
-
-      const mockResponse = {
-        data: {
-          data: [
-            { id: 'openai/gpt-4', pricing: { prompt: 1 } },
-            { id: 'mistral/mistral-large', pricing: { prompt: 0.5 } },
-            { id: 'anthropic/claude', pricing: { prompt: 1.5 } }
-          ]
-        }
-      };
-
-      mockFetchModels.mockResolvedValue(mockResponse);
-
-      await modelsAction({ search: 'mistral' });
-
-      // Check that the search was mentioned in the output
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('matching \'mistral\'')
-      );
-    });
-
-    test('shows no models message when filtered list is empty', async () => {
-      const mockApiKey = 'test-api-key';
-      validateApiKey.mockReturnValue(mockApiKey);
-
-      const mockResponse = {
-        data: {
-          data: [
             { id: 'paid-model', pricing: { prompt: 1 } }
           ]
         }
-      };
+      });
 
-      mockFetchModels.mockResolvedValue(mockResponse);
+      await modelsAction({ free: true });
 
-      await modelsAction({ free: true });  // Looking for free models in paid-only list
+      const header = console.log.mock.calls
+        .map(([line]) => line)
+        .find((line) => typeof line === 'string' && line.includes('RouterX Models (Free'));
+      expect(header).toBeDefined();
+    });
 
-      // Check that no models found message was shown
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('No models found')
-      );
+    test('filters by search keyword', async () => {
+      validateApiKey.mockReturnValue('key');
+      mockFetchModels.mockResolvedValue({
+        data: {
+          data: [
+            { id: 'openai/gpt-4' },
+            { id: 'mistral/mistral-large' }
+          ]
+        }
+      });
+
+      await modelsAction({ search: 'mistral' });
+      const header = console.log.mock.calls
+        .map(([line]) => line)
+        .find((line) => typeof line === 'string' && line.includes('Search: "mistral"'));
+      expect(header).toBeDefined();
+    });
+
+    test('filters by vendor prefix', async () => {
+      validateApiKey.mockReturnValue('key');
+      mockFetchModels.mockResolvedValue({
+        data: {
+          data: [
+            { id: 'openai/gpt-4o-mini' },
+            { id: 'mistral/mistral-large' }
+          ]
+        }
+      });
+
+      await modelsAction({ vendor: 'openai' });
+      const tableLine = console.log.mock.calls
+        .map(([line]) => line)
+        .find((line) => typeof line === 'string' && line.includes('openai/gpt-4o-mini'));
+      expect(tableLine).toBeDefined();
+    });
+
+    test('prints warning when no models match filters', async () => {
+      validateApiKey.mockReturnValue('key');
+      mockFetchModels.mockResolvedValue({
+        data: { data: [{ id: 'paid-model', pricing: { prompt: 1 } }] }
+      });
+
+      await modelsAction({ free: true });
+      const warningLine = console.log.mock.calls
+        .map(([line]) => line)
+        .find((line) => typeof line === 'string' && line.includes('No models found'));
+      expect(warningLine).toBeDefined();
     });
 
     test('handles API errors gracefully', async () => {
-      const mockApiKey = 'test-api-key';
-      validateApiKey.mockReturnValue(mockApiKey);
-
-      const mockError = new Error('API Error');
-
-      mockFetchModels.mockRejectedValue(mockError);
+      validateApiKey.mockReturnValue('key');
+      const failure = new Error('boom');
+      mockFetchModels.mockRejectedValue(failure);
 
       await modelsAction({});
 
-      expect(handleError).toHaveBeenCalledWith(mockError, 'MODEL_FETCH_ERROR', { operation: 'handleModelsCommand', options: {} });
+      expect(handleError).toHaveBeenCalledWith(failure, 'MODEL_FETCH_ERROR', expect.objectContaining({
+        operation: 'handleModelsCommand'
+      }));
     });
 
-    test('does not require an API key to run', async () => {
+    test('runs without API key', async () => {
       validateApiKey.mockReturnValue(null);
-
-      const mockResponse = {
-        data: {
-          data: [
-            { id: 'test-model', pricing: { prompt: 0.5 } }
-          ]
-        }
-      };
-
-      mockFetchModels.mockResolvedValue(mockResponse);
+      mockFetchModels.mockResolvedValue({
+        data: { data: [{ id: 'test-model' }] }
+      });
 
       await modelsAction({});
-
-      // Should still call the API even without an API key
       expect(mockFetchModels).toHaveBeenCalledWith('https://test-api.com');
+    });
+
+    test('outputs JSON when requested', async () => {
+      validateApiKey.mockReturnValue('key');
+      mockFetchModels.mockResolvedValue({
+        data: { data: [{ id: 'openai/gpt-4o' }] }
+      });
+
+      await modelsAction({ json: true });
+      const jsonCall = console.log.mock.calls
+        .map(([line]) => line)
+        .find((line) => typeof line === 'string' && line.trim().startsWith('{'));
+      expect(jsonCall).toContain('"count":');
+    });
+
+    test('uses cached models when available', async () => {
+      validateApiKey.mockReturnValue('key');
+      readJsonCache.mockReturnValue({
+        data: { models: [{ id: 'cached/model' }], fetchedAt: new Date().toISOString() },
+        savedAt: Date.now()
+      });
+      mockFetchModels.mockResolvedValue({
+        data: { data: [{ id: 'live/model' }] }
+      });
+
+      await modelsAction({});
+      expect(mockFetchModels).not.toHaveBeenCalled();
+      const tableLine = console.log.mock.calls
+        .map(([line]) => line)
+        .find((line) => typeof line === 'string' && line.includes('cached/model'));
+      expect(tableLine).toBeDefined();
     });
   });
 
-  describe('filterModels function', () => {
-    test('filters by free models correctly', async () => {
+  describe('filterModels', () => {
+    test('filters free models', () => {
       const models = [
-        { id: 'free-model:free', pricing: { prompt: 0 } },
-        { id: 'paid-model', pricing: { prompt: 1 } },
-        { id: 'another-free-model-free', pricing: { prompt: 0 } }
+        { id: 'free:free', pricing: { prompt: 0 } },
+        { id: 'paid', pricing: { prompt: 1 } }
       ];
 
       const filtered = filterModels(models, { free: true });
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe('free:free');
+    });
 
-      // Verify that only free models are returned
-      expect(filtered.length).toBe(2);
-      expect(filtered).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ id: 'free-model:free' }),
-          expect.objectContaining({ id: 'another-free-model-free' })
-        ])
-      );
+    test('filters vendor prefixes', () => {
+      const models = [
+        { id: 'openai/gpt-4' },
+        { id: 'anthropic/claude' }
+      ];
+
+      const filtered = filterModels(models, { vendor: 'anthropic' });
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe('anthropic/claude');
     });
   });
 });

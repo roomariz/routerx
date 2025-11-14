@@ -89,7 +89,7 @@ describe('StreamHandler', () => {
       await handleStream(mockResponse, options);
 
       // Verify file operations were called
-      expect(ensureDirectory).toHaveBeenCalledWith('/test/output.txt');
+      expect(ensureDirectory).toHaveBeenCalledWith('/test');
       expect(fs.createWriteStream).toHaveBeenCalledWith('/test/output.txt', { flags: 'a' });
       expect(mockWriteStream.write).toHaveBeenCalledWith(
         expect.stringContaining('Test prompt')

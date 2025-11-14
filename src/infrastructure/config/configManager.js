@@ -35,6 +35,10 @@ class ConfigManager {
         monitoringLogSampling: false,
         successMetricsTracking: true,
         resilienceTelemetry: true
+      },
+      telemetry: {
+        referer: 'https://routerx.sh',
+        title: 'RouterX CLI'
       }
     };
   }
@@ -198,6 +202,10 @@ class ConfigManager {
       cloned.features = config.features ? { ...config.features } : config.features;
     }
 
+    if (Object.prototype.hasOwnProperty.call(config, 'telemetry')) {
+      cloned.telemetry = config.telemetry ? { ...config.telemetry } : config.telemetry;
+    }
+
     return cloned;
   }
 
@@ -224,6 +232,14 @@ class ConfigManager {
       if (key === 'features' && value && typeof value === 'object') {
         merged.features = {
           ...merged.features,
+          ...value
+        };
+        continue;
+      }
+
+      if (key === 'telemetry' && value && typeof value === 'object') {
+        merged.telemetry = {
+          ...merged.telemetry,
           ...value
         };
         continue;
@@ -258,6 +274,22 @@ class ConfigManager {
       }
     } else {
       delete merged.features;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(baseConfig, 'telemetry')) {
+      if (merged.telemetry) {
+        const baseTelemetry = baseConfig.telemetry ? { ...baseConfig.telemetry } : {};
+        merged.telemetry = {
+          ...baseTelemetry,
+          ...merged.telemetry
+        };
+      } else if (baseConfig.telemetry) {
+        merged.telemetry = { ...baseConfig.telemetry };
+      } else {
+        merged.telemetry = baseConfig.telemetry;
+      }
+    } else {
+      delete merged.telemetry;
     }
 
     return merged;
@@ -301,12 +333,18 @@ class ConfigManager {
     const overrides = {};
     const resilienceOverrides = {};
     const featureOverrides = {};
+    const telemetryOverrides = {};
     const appliedKeys = [];
 
     const assignString = (envKey, targetKey) => {
       const value = process.env[envKey];
       if (typeof value === 'string' && value.trim() !== '') {
-        overrides[targetKey] = value.trim();
+        if (targetKey.startsWith('telemetry.')) {
+          const key = targetKey.split('.')[1];
+          telemetryOverrides[key] = value.trim();
+        } else {
+          overrides[targetKey] = value.trim();
+        }
         appliedKeys.push(envKey);
       }
     };
@@ -346,6 +384,8 @@ class ConfigManager {
     assignString('ROUTERX_DEFAULT_MODEL', 'defaultModel');
     assignString('ROUTERX_DEFAULT_BASE_URL', 'defaultBaseUrl');
     assignString('ROUTERX_DEFAULT_SAVE_PATH', 'defaultSavePath');
+    assignString('ROUTERX_HTTP_REFERER', 'telemetry.referer');
+    assignString('ROUTERX_CLIENT_TITLE', 'telemetry.title');
 
     assignNumber('ROUTERX_TIMEOUT', 'timeout', { integer: false });
     assignNumber('ROUTERX_MAX_RETRIES', 'maxRetries', { integer: true });
@@ -371,6 +411,10 @@ class ConfigManager {
 
     if (Object.keys(featureOverrides).length > 0) {
       overrides.features = featureOverrides;
+    }
+
+    if (Object.keys(telemetryOverrides).length > 0) {
+      overrides.telemetry = telemetryOverrides;
     }
 
     return { overrides, appliedKeys };

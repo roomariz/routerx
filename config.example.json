@@ -19,6 +19,10 @@
       "breakerCooldownMs": "Required positive number in milliseconds.",
       "breakerHalfOpenSuccesses": "Required positive integer.",
       "breakerHalfOpenFailures": "Required positive integer."
+    },
+    "telemetry": {
+      "referer": "Required non-empty string URL that matches the App URL registered with your OpenRouter key.",
+      "title": "Required non-empty string describing your application."
     }
   },
   "_environmentOverrides": {
@@ -35,7 +39,9 @@
     "ROUTERX_RESILIENCE_BREAKER_THRESHOLD": "Overrides resilience.breakerThreshold.",
     "ROUTERX_RESILIENCE_BREAKER_COOLDOWN_MS": "Overrides resilience.breakerCooldownMs.",
     "ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_SUCCESSES": "Overrides resilience.breakerHalfOpenSuccesses.",
-    "ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_FAILURES": "Overrides resilience.breakerHalfOpenFailures."
+    "ROUTERX_RESILIENCE_BREAKER_HALF_OPEN_FAILURES": "Overrides resilience.breakerHalfOpenFailures.",
+    "ROUTERX_HTTP_REFERER": "Overrides telemetry.referer.",
+    "ROUTERX_CLIENT_TITLE": "Overrides telemetry.title."
   },
   "defaultModel": "openai/gpt-4o-mini",
   "defaultBaseUrl": "https://openrouter.ai/api/v1",
@@ -52,5 +58,9 @@
     "breakerCooldownMs": 60000,
     "breakerHalfOpenSuccesses": 1,
     "breakerHalfOpenFailures": 1
+  },
+  "telemetry": {
+    "referer": "https://routerx.sh",
+    "title": "RouterX CLI"
   }
 }

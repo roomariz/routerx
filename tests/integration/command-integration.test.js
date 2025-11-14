@@ -81,6 +81,11 @@ jest.mock('../../src/shared/utils/stream.js', () => ({
   handleStream: jest.fn(() => Promise.resolve())
 }));
 
+jest.mock('../../src/shared/utils/cache.js', () => ({
+  readJsonCache: jest.fn(() => null),
+  writeJsonCache: jest.fn()
+}));
+
 // Import after mocking
 const { registerChatCommand } = require('../../src/commands/chat/index.js');
 const { registerModelsCommand } = require('../../src/commands/models/index.js');

@@ -272,20 +272,21 @@ export class HealthChecker {
 
   async checkApiKeyAvailability() {
     const name = 'API Key';
-    const openAiKeyRaw = process.env.OPENAI_API_KEY;
-    const openRouterKeyRaw = process.env.OPENROUTER_API_KEY;
+    const apiKeySources = [
+      { envVar: 'OPENAI_API_KEY', value: process.env.OPENAI_API_KEY },
+      { envVar: 'OPENROUTER_API_KEY', value: process.env.OPENROUTER_API_KEY },
+      { envVar: 'GEMINI_API_KEY', value: process.env.GEMINI_API_KEY }
+    ];
     const apiKey = validateApiKey();
-    const detectedSource = apiKey
-      ? (openAiKeyRaw && openAiKeyRaw.trim() ? 'OPENAI_API_KEY' : 'OPENROUTER_API_KEY')
-      : undefined;
+    const detectedSource = apiKeySources.find((source) => typeof source.value === 'string' && source.value.trim() !== '')?.envVar;
 
     const details = {
-      sourcesChecked: ['OPENAI_API_KEY', 'OPENROUTER_API_KEY'],
-      detectedSource
+      sourcesChecked: apiKeySources.map((source) => source.envVar),
+      detectedSource: apiKey ? detectedSource : undefined
     };
 
     if (typeof apiKey === 'string' && apiKey.trim() !== '') {
-      this.logger.debug?.('API key detected for health check', { component: 'HealthChecker', check: name, detectedSource });
+      this.logger.debug?.('API key detected for health check', { component: 'HealthChecker', check: name, detectedSource: details.detectedSource });
       return this.buildCheckResult(name, STATUS.HEALTHY, {
         message: 'API key detected in environment',
         details
@@ -294,7 +295,7 @@ export class HealthChecker {
 
     this.logger.warn('API key missing for health check', { component: 'HealthChecker', check: name });
     return this.buildCheckResult(name, STATUS.UNHEALTHY, {
-      message: 'Missing API key. Set OPENAI_API_KEY or OPENROUTER_API_KEY.',
+      message: 'Missing API key. Set OPENAI_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY.',
       details
     });
   }
@@ -310,7 +311,20 @@ export class HealthChecker {
     const details = { path: targetPath };
 
     try {
-      const stats = await this.fsPromises.stat(targetPath);
+      let stats;
+      try {
+        stats = await this.fsPromises.stat(targetPath);
+      } catch (error) {
+        if (error?.code === 'ENOENT') {
+          return this.buildCheckResult(name, STATUS.UNHEALTHY, {
+            message: 'Output directory is missing',
+            details: { ...details, missing: true, error: error.message }
+          });
+        }
+
+        throw error;
+      }
+
       if (!stats.isDirectory()) {
         return this.buildCheckResult(name, STATUS.UNHEALTHY, {
           message: 'Output path is not a directory',
@@ -319,16 +333,26 @@ export class HealthChecker {
       }
 
       const fsConstants = this.fsConstants || fs.constants;
-      if (fsConstants?.R_OK || fsConstants?.W_OK) {
+      const hasModeFlags = typeof fsConstants?.R_OK === 'number' || typeof fsConstants?.W_OK === 'number';
+      if (hasModeFlags) {
         await this.fsPromises.access(targetPath, (fsConstants.R_OK ?? 0) | (fsConstants.W_OK ?? 0));
       } else {
         await this.fsPromises.access(targetPath);
       }
 
-      this.logger.debug?.('Filesystem readiness check passed', { component: 'HealthChecker', path: targetPath });
+      const successDetails = {
+        ...details,
+        writable: true
+      };
+
+      this.logger.debug?.('Filesystem readiness check passed', {
+        component: 'HealthChecker',
+        path: targetPath
+      });
+
       return this.buildCheckResult(name, STATUS.HEALTHY, {
         message: 'Output directory is accessible',
-        details: { ...details, writable: true }
+        details: successDetails
       });
     } catch (error) {
       const errorDetails = { ...details, error: error?.message };

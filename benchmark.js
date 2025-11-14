@@ -43,9 +43,9 @@ const config = configManager.loadConfig();
 const apiClient = new ApiClient(config);
 
 // Get API key from environment
-const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  console.error('❌ API key not found! Please set OPENROUTER_API_KEY or OPENAI_API_KEY environment variable.');
+  console.error('❌ API key not found! Please set OPENAI_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY environment variable.');
   process.exit(1);
 }
 

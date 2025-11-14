@@ -6,6 +6,9 @@ import { bootstrap } from '../core/bootstrap.js';
 import { createProgram } from './program.js';
 import { setupCLI } from '../core/index.js';
 import { loadRuntimeConfig } from '../infrastructure/config/runtimeConfig.js';
+import { initializeCliSession } from './state/session.js';
+import { configureCliLogging } from './ui/loggerControl.js';
+import { renderStartupBanner } from './ui/banner.js';
 
 // Bootstrap the application with global error handlers
 const bootstrapResult = bootstrap();
@@ -13,6 +16,11 @@ if (!bootstrapResult.success) {
   console.error('Failed to bootstrap application:', bootstrapResult.message);
   process.exit(1);
 }
+
+const argvFlags = process.argv.slice(2);
+const verboseRequested = argvFlags.some((flag) => flag === '--verbose' || flag === '-v');
+initializeCliSession({ verbose: verboseRequested });
+configureCliLogging({ verbose: verboseRequested });
 
 // Validate configuration up front so operators see failures immediately
 try {
@@ -26,6 +34,7 @@ const program = createProgram();
 
 // Setup all commands
 setupCLI(program);
+renderStartupBanner();
 
 // Show help when no command is provided so Commander can still enforce unknown commands
 if (process.argv.length <= 2) {
